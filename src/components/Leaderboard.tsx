@@ -1,8 +1,10 @@
 import type { TraderSummary } from '../lib/analytics'
 import { formatDateTime, formatPercent, formatUsd } from '../lib/format'
 
+/** 排序维度：用于观察列表排行榜的展示与交互。 */
 export type LeaderboardSort = 'cashPnl' | 'percentPnl' | 'tradeVolumeUsd'
 
+/** 交易员排行榜：根据本地缓存汇总数据进行排序与选择跳转。 */
 export function Leaderboard(props: {
   rows: TraderSummary[]
   selectedUser?: string
@@ -91,4 +93,3 @@ export function Leaderboard(props: {
     </div>
   )
 }
-

@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import type { DataApiTrade } from '../lib/polymarketDataApi'
 import { getRecentTrades } from '../lib/polymarketDataApi'
 
+/** 热门交易员行：按近似成交额排序后用于表格展示。 */
 export type TopTraderRow = {
   user: string
   tradeCount: number
@@ -15,6 +16,7 @@ type State =
   | { status: 'ready'; rows: TopTraderRow[]; error?: string }
   | { status: 'error'; rows: TopTraderRow[]; error: string }
 
+/** 将最近成交聚合到交易员维度，并按成交额降序排序。 */
 function aggregate(trades: DataApiTrade[]) {
   const map = new Map<string, TopTraderRow>()
   for (const t of trades) {
@@ -30,6 +32,7 @@ function aggregate(trades: DataApiTrade[]) {
   return Array.from(map.values()).sort((a, b) => b.approxVolumeUsd - a.approxVolumeUsd)
 }
 
+/** 拉取最近成交并聚合为热门交易员列表（手动触发刷新）。 */
 export function useTopTraders() {
   const [state, setState] = useState<State>({ status: 'idle', rows: [] })
 
@@ -47,4 +50,3 @@ export function useTopTraders() {
 
   return { ...state, refresh }
 }
-

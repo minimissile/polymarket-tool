@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { DataApiPosition } from '../lib/polymarketDataApi'
 import { formatPercent, formatUsd } from '../lib/format'
 
+/** 当前持仓表格：展示 Data-API Positions，并支持关键词筛选。 */
 export function PositionsTable(props: { positions: DataApiPosition[]; maxRows?: number }) {
   const [query, setQuery] = useState('')
   const maxRows = props.maxRows ?? 50
@@ -63,4 +64,3 @@ export function PositionsTable(props: { positions: DataApiPosition[]; maxRows?: 
     </div>
   )
 }
-

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
+/** 本地持久化的 `useState`：用 `localStorage` 做读写与跨刷新保存。 */
 export function useLocalStorageState<T>(key: string, fallback: T, options?: { preferFallback?: boolean }) {
   const [value, setValue] = useState<T>(() => {
     try {

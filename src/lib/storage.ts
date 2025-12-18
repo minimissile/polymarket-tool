@@ -1,5 +1,6 @@
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }
 
+/** 从 localStorage 读取 JSON；失败时返回 fallback。 */
 export function readJson<T extends JsonValue>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key)
@@ -10,6 +11,7 @@ export function readJson<T extends JsonValue>(key: string, fallback: T): T {
   }
 }
 
+/** 将值写入 localStorage（JSON 序列化）；失败时静默忽略。 */
 export function writeJson<T extends JsonValue>(key: string, value: T) {
   try {
     localStorage.setItem(key, JSON.stringify(value))
@@ -18,6 +20,7 @@ export function writeJson<T extends JsonValue>(key: string, value: T) {
   }
 }
 
+/** 合并两组数据并按 key 去重，同时限制最大数量（保留最新的一段）。 */
 export function mergeUniqueByKey<T>(
   existing: T[],
   incoming: T[],
@@ -37,4 +40,3 @@ export function mergeUniqueByKey<T>(
   })
   return merged.slice(Math.max(0, merged.length - maxSize))
 }
-

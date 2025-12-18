@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import * as echarts from 'echarts'
 
+/** ECharts 轻封装：负责初始化、响应容器尺寸变化，以及更新 option。 */
 export function EChart(props: { option: unknown; height: number }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const chartRef = useRef<echarts.ECharts | null>(null)

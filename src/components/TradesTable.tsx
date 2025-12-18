@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { DataApiTrade } from '../lib/polymarketDataApi'
 import { formatDateTime, formatNumber } from '../lib/format'
 
+/** 最近交易表格：按时间倒序展示，并支持关键词筛选。 */
 export function TradesTable(props: { trades: DataApiTrade[]; maxRows?: number }) {
   const [query, setQuery] = useState('')
   const maxRows = props.maxRows ?? 50
@@ -70,4 +71,3 @@ export function TradesTable(props: { trades: DataApiTrade[]; maxRows?: number })
     </div>
   )
 }
-

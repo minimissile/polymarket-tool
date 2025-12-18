@@ -78,6 +78,7 @@ type FetchJsonOptions = {
 
 const BASE_URL = 'https://data-api.polymarket.com'
 
+/** 以 JSON 方式请求 Data API，带超时与可选的 AbortSignal。 */
 async function fetchJson<T>(url: string, options?: FetchJsonOptions): Promise<T> {
   const timeoutMs = options?.timeoutMs ?? 12_000
   const controller = new AbortController()
@@ -107,6 +108,7 @@ async function fetchJson<T>(url: string, options?: FetchJsonOptions): Promise<T>
   }
 }
 
+/** 生成带查询参数的 Data API URL。 */
 function buildUrl(pathname: string, params: Record<string, string | number | boolean | undefined>) {
   const url = new URL(`${BASE_URL}${pathname}`)
   for (const [key, value] of Object.entries(params)) {
@@ -116,6 +118,7 @@ function buildUrl(pathname: string, params: Record<string, string | number | boo
   return url.toString()
 }
 
+/** 获取某个用户的成交（trades）。 */
 export async function getTradesByUser(
   user: string,
   params?: { limit?: number; offset?: number; market?: string; takerOnly?: boolean },
@@ -131,6 +134,7 @@ export async function getTradesByUser(
   return fetchJson<DataApiTrade[]>(url, options)
 }
 
+/** 获取全局最近成交（用于发现页聚合热门交易员）。 */
 export async function getRecentTrades(
   params?: { limit?: number; offset?: number; market?: string; takerOnly?: boolean },
   options?: FetchJsonOptions,
@@ -144,6 +148,7 @@ export async function getRecentTrades(
   return fetchJson<DataApiTrade[]>(url, options)
 }
 
+/** 获取某个用户的活动（activity）。 */
 export async function getActivityByUser(
   user: string,
   params?: { limit?: number; offset?: number; market?: string; side?: 'BUY' | 'SELL' },
@@ -159,6 +164,7 @@ export async function getActivityByUser(
   return fetchJson<DataApiActivity[]>(url, options)
 }
 
+/** 获取某个用户的持仓（positions）。 */
 export async function getPositionsByUser(
   user: string,
   params?: {

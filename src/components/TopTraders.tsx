@@ -1,6 +1,7 @@
 import { formatDateTime, formatUsd } from '../lib/format'
 import type { TopTraderRow } from '../hooks/useTopTraders'
 
+/** 热门交易员表格：展示聚合结果，并支持刷新与一键观察。 */
 export function TopTraders(props: {
   rows: TopTraderRow[]
   status: 'idle' | 'loading' | 'ready' | 'error'
@@ -53,4 +54,3 @@ export function TopTraders(props: {
     </div>
   )
 }
-

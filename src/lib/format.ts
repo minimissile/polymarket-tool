@@ -1,3 +1,4 @@
+/** 通用数字格式化（基于 Intl.NumberFormat）。 */
 export function formatNumber(value: number, options?: Intl.NumberFormatOptions) {
   return new Intl.NumberFormat(undefined, {
     maximumFractionDigits: 2,
@@ -5,10 +6,12 @@ export function formatNumber(value: number, options?: Intl.NumberFormatOptions) 
   }).format(value)
 }
 
+/** 百分比格式化：输入为百分比数值（例如 12.34 => "12.34%"）。 */
 export function formatPercent(value: number) {
   return `${formatNumber(value, { maximumFractionDigits: 2 })}%`
 }
 
+/** 美元金额格式化：根据数量级自动调整小数位。 */
 export function formatUsd(value: number) {
   const absValue = Math.abs(value)
   const maximumFractionDigits = absValue < 1 ? 4 : absValue < 100 ? 2 : 0
@@ -19,6 +22,7 @@ export function formatUsd(value: number) {
   }).format(value)
 }
 
+/** 将秒级 epoch 时间戳格式化为本地日期时间字符串。 */
 export function formatDateTime(epochSeconds: number) {
   const date = new Date(epochSeconds * 1000)
   return new Intl.DateTimeFormat(undefined, {
@@ -30,4 +34,3 @@ export function formatDateTime(epochSeconds: number) {
     second: '2-digit',
   }).format(date)
 }
-

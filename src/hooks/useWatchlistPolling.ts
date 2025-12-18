@@ -5,14 +5,17 @@ import { mergeUniqueByKey, readJson, writeJson } from '../lib/storage'
 
 type Status = { status: 'idle' | 'loading' | 'ready' | 'error'; lastRunAtMs?: number; error?: string }
 
+/** 构造本地缓存 key：用于按用户维度保存 trades/activity/positions。 */
 function storageKey(prefix: string, user: string) {
   return `pmta.cache.${prefix}.${user}`
 }
 
+/** 读取缓存（JSON）并在解析失败时回退到 fallback。 */
 function readCache<T>(key: string, fallback: T) {
   return readJson(key, fallback as never) as T
 }
 
+/** 对观察列表进行后台轮询更新：写入本地缓存，并暴露状态与手动 refresh。 */
 export function useWatchlistPolling(users: string[], options?: { enabled?: boolean; pollMs?: number }) {
   const enabled = options?.enabled ?? true
   const pollMs = options?.pollMs ?? 45_000

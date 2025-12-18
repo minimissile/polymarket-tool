@@ -13,6 +13,7 @@ export type TraderSummary = {
   lastTradeTs?: number
 }
 
+/** 汇总交易员核心指标：交易量、收益、持仓市值、最近交易时间等。 */
 export function summarizeTrader(
   user: string,
   trades: DataApiTrade[],
@@ -55,6 +56,7 @@ export function summarizeTrader(
 
 export type HeatmapCell = { day: number; hour: number; value: number }
 
+/** 构建“星期 x 小时”的交易次数热力图数据。 */
 export function buildTradeTimeHeatmap(trades: DataApiTrade[]) {
   const counts: number[][] = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0))
   for (const t of trades) {
@@ -79,6 +81,7 @@ export type HoldingBin = {
 
 type Lot = { ts: number; size: number }
 
+/** 将持仓秒数映射到固定区间标签，用于分布统计。 */
 function holdingBinsFromSeconds(seconds: number) {
   const hours = seconds / 3600
   if (hours <= 1) return '≤1h'
@@ -88,6 +91,7 @@ function holdingBinsFromSeconds(seconds: number) {
   return '>7d'
 }
 
+/** 以买入/卖出撮合的方式近似计算“持仓时长分布”。 */
 export function buildHoldingTimeDistribution(trades: DataApiTrade[]) {
   const buckets: Record<string, number> = {
     '≤1h': 0,
@@ -137,6 +141,7 @@ export function buildHoldingTimeDistribution(trades: DataApiTrade[]) {
 
 export type EquityPoint = { ts: number; balanceUsd: number }
 
+/** 基于 TRADE 活动的 USDC 流入/流出，构建累计现金流曲线（近似）。 */
 export function buildEquityCurveFromActivity(activities: DataApiActivity[]) {
   const tradeActivities = activities
     .filter((a) => a.type === 'TRADE' && a.usdcSize !== undefined && a.side)
@@ -164,6 +169,7 @@ export type TraderProfile = {
   topMarketConcentration: number
 }
 
+/** 计算分位数（p ∈ [0,1]），用于估算 P90 等指标。 */
 function percentile(values: number[], p: number) {
   if (values.length === 0) return 0
   const sorted = values.slice().sort((a, b) => a - b)
@@ -171,6 +177,7 @@ function percentile(values: number[], p: number) {
   return sorted[idx]
 }
 
+/** 变异系数（CV）：衡量交易金额尺度稳定性。 */
 function coefficientOfVariation(values: number[]) {
   if (values.length < 2) return 0
   const mean = values.reduce((acc, v) => acc + v, 0) / values.length
@@ -180,6 +187,7 @@ function coefficientOfVariation(values: number[]) {
   return stdev / Math.abs(mean)
 }
 
+/** 从 trades/activity 推断交易员画像：偏好周期、活跃时段、交易尺度分布等。 */
 export function inferTraderProfile(trades: DataApiTrade[], activities: DataApiActivity[]) {
   const holding = buildHoldingTimeDistribution(trades)
   const totalHoldingSamples = holding.reduce((acc, b) => acc + b.count, 0)

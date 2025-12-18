@@ -11,6 +11,7 @@ import { EChart } from './EChart'
 
 const dayLabels = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
 
+/** 交易员图表组：热力图、持仓周期分布、资金曲线。 */
 export function TraderCharts(props: {
   trades: DataApiTrade[]
   activity: DataApiActivity[]

@@ -24,14 +24,17 @@ type Options = {
   positionLimit?: number
 }
 
+/** 构造本地缓存 key：用于按用户维度保存 trades/activity/positions。 */
 function storageKey(prefix: string, user: string) {
   return `pmta.cache.${prefix}.${user}`
 }
 
+/** 读取缓存（JSON）并在解析失败时回退到 fallback。 */
 function readCache<T>(key: string, fallback: T) {
   return readJson(key, fallback as never) as T
 }
 
+/** 拉取并缓存某交易员的 trades/activity/positions，并周期性轮询更新。 */
 export function useTraderData(user: string | undefined, options?: Options) {
   const enabled = options?.enabled ?? Boolean(user)
   const pollMs = options?.pollMs ?? 15_000
@@ -130,4 +133,3 @@ export function useTraderData(user: string | undefined, options?: Options) {
 
   return state
 }
-
