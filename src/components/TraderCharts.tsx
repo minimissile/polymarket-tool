@@ -56,7 +56,18 @@ export function TraderCharts(props: {
         {
           type: 'heatmap',
           data: values,
-          emphasis: { itemStyle: { borderColor: '#333', borderWidth: 1 } },
+          itemStyle: {
+            borderColor: 'rgba(255, 255, 255, 0.1)',
+            borderWidth: 1,
+          },
+          emphasis: {
+            itemStyle: {
+              borderColor: 'rgba(255, 255, 255, 0.8)',
+              borderWidth: 2,
+              shadowBlur: 4,
+              shadowColor: 'rgba(0, 0, 0, 0.2)',
+            },
+          },
         },
       ],
     }
@@ -66,18 +77,30 @@ export function TraderCharts(props: {
     return {
       tooltip: {
         formatter: (p: { name: string; value: number }) => `${p.name}<br/>次数：${p.value}`,
+        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+        borderColor: '#334155',
+        textStyle: { color: '#f8fafc' },
       },
-      grid: { left: 40, right: 20, top: 30, bottom: 40 },
+      grid: { left: 40, right: 20, top: 30, bottom: 40, borderColor: 'transparent' },
       xAxis: {
         type: 'category',
         data: holding.map((b) => b.label),
+        axisLine: { lineStyle: { color: '#94a3b8' } },
+        axisTick: { show: false },
       },
-      yAxis: { type: 'value' },
+      yAxis: {
+        type: 'value',
+        splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.1)' } },
+        axisLabel: { color: '#94a3b8' },
+      },
       series: [
         {
           type: 'bar',
           data: holding.map((b) => b.count),
-          itemStyle: { color: '#3b82f6' },
+          itemStyle: {
+            color: '#3b82f6',
+            borderRadius: [4, 4, 0, 0],
+          },
         },
       ],
     }
@@ -94,42 +117,64 @@ export function TraderCharts(props: {
           const p = params[0]
           return `${p.axisValue}<br/>累计净流入：${formatUsd(p.data)}`
         },
+        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+        borderColor: '#334155',
+        textStyle: { color: '#f8fafc' },
       },
-      grid: { left: 60, right: 20, top: 30, bottom: 40 },
-      xAxis: { type: 'category', data: x, axisLabel: { hideOverlap: true } },
-      yAxis: { type: 'value' },
+      grid: { left: 60, right: 20, top: 30, bottom: 40, borderColor: 'transparent' },
+      xAxis: {
+        type: 'category',
+        data: x,
+        axisLabel: { hideOverlap: true, color: '#94a3b8' },
+        axisLine: { lineStyle: { color: '#94a3b8' } },
+        axisTick: { show: false },
+      },
+      yAxis: {
+        type: 'value',
+        splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.1)' } },
+        axisLabel: { color: '#94a3b8' },
+      },
       series: [
         {
           type: 'line',
           data: y,
           smooth: true,
           showSymbol: false,
-          lineStyle: { width: 2, color: last >= 0 ? '#16a34a' : '#dc2626' },
-          areaStyle: { opacity: 0.08 },
+          lineStyle: { width: 3, color: '#10b981' },
+          areaStyle: {
+            color: {
+              type: 'linear',
+              x: 0, y: 0, x2: 0, y2: 1,
+              colorStops: [
+                { offset: 0, color: 'rgba(16, 185, 129, 0.4)' },
+                { offset: 1, color: 'rgba(16, 185, 129, 0)' },
+              ],
+            },
+          },
         },
       ],
     }
   }, [equity])
 
   return (
-    <div className="chartsGrid">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       <ChartCard title="交易热力图（星期 x 小时）">
         {props.trades.length === 0 ? (
-          <div className="empty">暂无交易数据</div>
+          <div className="p-8 text-center text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">暂无交易数据</div>
         ) : (
           <EChart option={heatmapOption} height={height} />
         )}
       </ChartCard>
       <ChartCard title="持仓周期分布（按买入→卖出撮合）">
         {props.trades.length === 0 ? (
-          <div className="empty">暂无交易数据</div>
+          <div className="p-8 text-center text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">暂无交易数据</div>
         ) : (
           <EChart option={holdingOption} height={height} />
         )}
       </ChartCard>
       <ChartCard title="资金曲线（Trade 现金流净值）">
         {props.activity.length === 0 ? (
-          <div className="empty">暂无活动数据</div>
+          <div className="p-8 text-center text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">暂无活动数据</div>
         ) : (
           <EChart option={equityOption} height={height} />
         )}

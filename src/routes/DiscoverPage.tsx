@@ -25,7 +25,7 @@ export default function DiscoverPage() {
   }
 
   return (
-    <main className="page">
+    <main className="flex flex-col gap-8 w-full">
       <TopTraders
         rows={rows}
         status={status}

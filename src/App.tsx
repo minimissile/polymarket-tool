@@ -1,4 +1,3 @@
-import './App.css'
 import { Suspense, lazy } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppStateProvider } from './state/appState'
@@ -12,7 +11,7 @@ const DiscoverPage = lazy(() => import('./routes/DiscoverPage'))
 function App() {
   return (
     <AppStateProvider>
-      <Suspense fallback={<div className="page"><div className="empty bigEmpty">加载中…</div></div>}>
+      <Suspense fallback={<div className="flex h-screen items-center justify-center text-slate-500">加载中…</div>}>
         <Routes>
           <Route element={<AppShell />}>
             <Route index element={<Navigate to="/analyze" replace />} />

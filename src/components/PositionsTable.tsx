@@ -22,11 +22,11 @@ export function PositionsTable(props: { positions: DataApiPosition[]; maxRows?: 
   }, [maxRows, props.positions, query])
 
   return (
-    <div className="tableSection">
-      <div className="tableToolbar">
-        <h2 className="sectionTitle">当前持仓（Data-API Positions）</h2>
+    <div className="flex flex-col gap-2">
+      <div className="flex gap-3 items-center">
+        <h2 className="text-base font-semibold text-slate-900 dark:text-slate-50 mb-4">当前持仓（Data-API Positions）</h2>
         <input
-          className="input"
+          className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-50 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 focus:border-blue-500 transition-all mb-4"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="筛选：标题 / outcome / conditionId"
@@ -34,27 +34,27 @@ export function PositionsTable(props: { positions: DataApiPosition[]; maxRows?: 
         />
       </div>
       {filtered.length === 0 ? (
-        <div className="empty">暂无持仓</div>
+        <div className="p-8 text-center text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">暂无持仓</div>
       ) : (
-        <div className="tableWrap" role="region" aria-label="当前持仓表格">
-          <table className="table">
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden shadow-sm" role="region" aria-label="当前持仓表格">
+          <table className="w-full border-collapse text-sm">
             <thead>
               <tr>
-                <th>市场</th>
-                <th>Outcome</th>
-                <th>当前价值</th>
-                <th>现金收益</th>
-                <th>收益率</th>
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">市场</th>
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">Outcome</th>
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">当前价值</th>
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">现金收益</th>
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">收益率</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((p) => (
-                <tr key={`${p.conditionId}:${p.asset}`}>
-                  <td title={p.title ?? p.conditionId}>{p.title ?? p.conditionId.slice(0, 10) + '…'}</td>
-                  <td>{p.outcome ?? '—'}</td>
-                  <td>{formatUsd(p.currentValue)}</td>
-                  <td className={p.cashPnl >= 0 ? 'pos' : 'neg'}>{formatUsd(p.cashPnl)}</td>
-                  <td className={p.percentPnl >= 0 ? 'pos' : 'neg'}>{formatPercent(p.percentPnl)}</td>
+                <tr key={`${p.conditionId}:${p.asset}`} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                  <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 align-middle" title={p.title ?? p.conditionId}>{p.title ?? p.conditionId.slice(0, 10) + '…'}</td>
+                  <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 align-middle">{p.outcome ?? '—'}</td>
+                  <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 align-middle">{formatUsd(p.currentValue)}</td>
+                  <td className={`px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 align-middle ${p.cashPnl >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>{formatUsd(p.cashPnl)}</td>
+                  <td className={`px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 align-middle ${p.percentPnl >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>{formatPercent(p.percentPnl)}</td>
                 </tr>
               ))}
             </tbody>
