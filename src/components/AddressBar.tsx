@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { isEvmAddress, normalizeAddress } from '../lib/validate'
 
+/** 地址输入条：校验 EVM 地址并提供“分析/观察”快捷操作。 */
 export function AddressBar(props: {
   value: string
   disabled?: boolean
@@ -60,4 +61,3 @@ export function AddressBar(props: {
     </div>
   )
 }
-
