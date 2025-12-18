@@ -5,6 +5,7 @@ import { useLocalStorageState } from '../hooks/useLocalStorageState'
 import { useWatchlistPolling } from '../hooks/useWatchlistPolling'
 import { isEvmAddress } from '../lib/validate'
 
+/** 全局应用状态：在路由间共享选中地址、观察列表与轮询状态。 */
 export type AppState = {
   selectedUser?: string
   setSelectedUser: (next: string | undefined) => void
@@ -24,6 +25,7 @@ export type AppState = {
 
 const AppStateContext = createContext<AppState | null>(null)
 
+/** 从 URL 查询参数中解析初始用户地址（用于分享链接直达）。 */
 function getInitialUrlUser() {
   try {
     const url = new URL(window.location.href)
@@ -36,6 +38,7 @@ function getInitialUrlUser() {
   }
 }
 
+/** 全局状态 Provider：把 localStorage 持久化状态与轮询能力注入到全应用。 */
 export function AppStateProvider(props: { children: ReactNode }) {
   const urlUser = getInitialUrlUser()
 
@@ -51,6 +54,7 @@ export function AppStateProvider(props: { children: ReactNode }) {
     {},
   )
 
+  /** 把地址加入观察列表，并将其设为当前选中用户。 */
   const addToWatchlist = useCallback(
     (address: string) => {
       if (!isEvmAddress(address)) return
@@ -64,6 +68,7 @@ export function AppStateProvider(props: { children: ReactNode }) {
     [setSelectedUser, setWatchlist],
   )
 
+  /** 从观察列表移除地址；若移除的是当前选中地址，则清空选中。 */
   const removeFromWatchlist = useCallback(
     (address: string) => {
       const normalized = address.toLowerCase()
@@ -73,6 +78,7 @@ export function AppStateProvider(props: { children: ReactNode }) {
     [selectedUser, setSelectedUser, setWatchlist],
   )
 
+  /** 记录“已读”到某个时间戳，用于计算新交易数量。 */
   const markTradesAsSeen = useCallback(
     (user: string, latestTradeTs: number) => {
       if (!isEvmAddress(user)) return
@@ -114,9 +120,9 @@ export function AppStateProvider(props: { children: ReactNode }) {
   return <AppStateContext.Provider value={value}>{props.children}</AppStateContext.Provider>
 }
 
+/** 获取全局应用状态；必须在 `AppStateProvider` 内使用。 */
 export function useAppState() {
   const ctx = useContext(AppStateContext)
   if (!ctx) throw new Error('useAppState must be used within AppStateProvider')
   return ctx
 }
-

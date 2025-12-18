@@ -8,6 +8,7 @@ const AnalyzePage = lazy(() => import('./routes/AnalyzePage'))
 const WatchlistPage = lazy(() => import('./routes/WatchlistPage'))
 const DiscoverPage = lazy(() => import('./routes/DiscoverPage'))
 
+/** 应用根组件：提供全局状态、懒加载路由与统一布局壳。 */
 function App() {
   return (
     <AppStateProvider>

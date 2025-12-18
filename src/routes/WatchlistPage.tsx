@@ -8,6 +8,7 @@ import { isEvmAddress, normalizeAddress } from '../lib/validate'
 import { summarizeTrader } from '../lib/analytics'
 import { useAppState } from '../state/appState'
 
+/** 观察列表页：维护本地观察地址集合，并用缓存数据渲染排行榜。 */
 export default function WatchlistPage() {
   const navigate = useNavigate()
   const { watchlist, removeFromWatchlist, sortBy, setSortBy, polling, addToWatchlist, selectedUser, setSelectedUser } =
@@ -29,6 +30,7 @@ export default function WatchlistPage() {
     })
   }, [polling.lastRunAtMs, watchlist])
 
+  /** 选择某个地址进行分析（跳转到详情页并更新全局选中地址）。 */
   const onAnalyze = (address: string) => {
     if (!isEvmAddress(address)) return
     const normalized = address.toLowerCase()
@@ -36,6 +38,7 @@ export default function WatchlistPage() {
     navigate(`/trader/${normalized}`)
   }
 
+  /** 将地址加入观察列表并跳转到详情页。 */
   const onWatch = (address: string) => {
     if (!isEvmAddress(address)) return
     const normalized = address.toLowerCase()

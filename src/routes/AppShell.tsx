@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAppState } from '../state/appState'
 
+/** 应用布局壳：渲染顶部信息、导航与子路由出口。 */
 export function AppShell() {
   const { polling } = useAppState()
 

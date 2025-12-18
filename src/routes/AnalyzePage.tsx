@@ -11,6 +11,7 @@ import { isEvmAddress, normalizeAddress } from '../lib/validate'
 import { useTraderData } from '../hooks/useTraderData'
 import { useAppState } from '../state/appState'
 
+/** 从路由参数、查询参数与全局选中态中挑选出一个合法 EVM 地址。 */
 function resolveUser(paramUser: string | undefined, searchUser: string | null, fallbackUser: string | undefined) {
   const candidates = [paramUser, searchUser ?? undefined, fallbackUser]
   for (const v of candidates) {
@@ -21,6 +22,7 @@ function resolveUser(paramUser: string | undefined, searchUser: string | null, f
   return undefined
 }
 
+/** 分析页：输入地址并跳转到详情；展示交易、持仓、活动统计与图表。 */
 export default function AnalyzePage() {
   const navigate = useNavigate()
   const params = useParams<{ user?: string }>()
@@ -46,6 +48,7 @@ export default function AnalyzePage() {
     writeJson('pmta.lastAddressInput', normalizedInput as never)
   }, [normalizedInput])
 
+  /** 校验并跳转到交易员详情页，同时更新全局选中地址。 */
   const onAnalyze = (address: string) => {
     if (!isEvmAddress(address)) return
     const normalized = address.toLowerCase()
@@ -53,6 +56,7 @@ export default function AnalyzePage() {
     navigate(`/trader/${normalized}`)
   }
 
+  /** 把地址加入观察列表，并跳转到交易员详情页。 */
   const onWatch = (address: string) => {
     if (!isEvmAddress(address)) return
     const normalized = address.toLowerCase()
@@ -79,6 +83,7 @@ export default function AnalyzePage() {
     return selected.data.trades.filter((t) => t.timestamp > lastSeenTradeTs).length
   }, [lastSeenByUser, routeUser, selected.data.trades])
 
+  /** 将当前用户最新一笔交易时间戳写入“已读”，用于清零新交易提示。 */
   const markAsSeen = () => {
     if (!routeUser) return
     const latestTs = selected.data.trades.reduce((acc, t) => Math.max(acc, t.timestamp), 0)
@@ -212,4 +217,3 @@ export default function AnalyzePage() {
     </main>
   )
 }
-
