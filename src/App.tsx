@@ -16,7 +16,7 @@ function App() {
           <Route element={<AppShell />}>
             <Route index element={<Navigate to="/analyze" replace />} />
             <Route path="/analyze" element={<AnalyzePage />} />
-            <Route path="/trader/:user" element={<AnalyzePage />} />
+            <Route path="/trader/:user/:tab?" element={<AnalyzePage />} />
             <Route path="/watchlist" element={<WatchlistPage />} />
             <Route path="/discover" element={<DiscoverPage />} />
             <Route path="*" element={<Navigate to="/analyze" replace />} />

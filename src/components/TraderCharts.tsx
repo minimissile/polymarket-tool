@@ -109,7 +109,6 @@ export function TraderCharts(props: {
   const equityOption = useMemo(() => {
     const x = equity.map((p) => formatDateTime(p.ts))
     const y = equity.map((p) => p.balanceUsd)
-    const last = equity.at(-1)?.balanceUsd ?? 0
     return {
       tooltip: {
         trigger: 'axis',
@@ -157,21 +156,23 @@ export function TraderCharts(props: {
   }, [equity])
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      <ChartCard title="交易热力图（星期 x 小时）">
-        {props.trades.length === 0 ? (
-          <div className="p-8 text-center text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">暂无交易数据</div>
-        ) : (
-          <EChart option={heatmapOption} height={height} />
-        )}
-      </ChartCard>
-      <ChartCard title="持仓周期分布（按买入→卖出撮合）">
-        {props.trades.length === 0 ? (
-          <div className="p-8 text-center text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">暂无交易数据</div>
-        ) : (
-          <EChart option={holdingOption} height={height} />
-        )}
-      </ChartCard>
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <ChartCard title="交易热力图（星期 x 小时）">
+          {props.trades.length === 0 ? (
+            <div className="p-8 text-center text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">暂无交易数据</div>
+          ) : (
+            <EChart option={heatmapOption} height={height} />
+          )}
+        </ChartCard>
+        <ChartCard title="持仓周期分布（按买入→卖出撮合）">
+          {props.trades.length === 0 ? (
+            <div className="p-8 text-center text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">暂无交易数据</div>
+          ) : (
+            <EChart option={holdingOption} height={height} />
+          )}
+        </ChartCard>
+      </div>
       <ChartCard title="资金曲线（Trade 现金流净值）">
         {props.activity.length === 0 ? (
           <div className="p-8 text-center text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">暂无活动数据</div>

@@ -34,3 +34,28 @@ export function formatDateTime(epochSeconds: number) {
     second: '2-digit',
   }).format(date)
 }
+
+export function formatRelativeTime(epochSeconds: number, nowMs: number = Date.now()) {
+  const deltaMs = nowMs - epochSeconds * 1000
+  const absMs = Math.abs(deltaMs)
+  const isFuture = deltaMs < 0
+
+  const sec = Math.floor(absMs / 1000)
+  if (sec < 5) return isFuture ? '即将' : '刚刚'
+  if (sec < 60) return `${sec}秒${isFuture ? '后' : '前'}`
+
+  const min = Math.floor(sec / 60)
+  if (min < 60) return `${min}分钟${isFuture ? '后' : '前'}`
+
+  const hour = Math.floor(min / 60)
+  if (hour < 24) return `${hour}小时${isFuture ? '后' : '前'}`
+
+  const day = Math.floor(hour / 24)
+  if (day < 30) return `${day}天${isFuture ? '后' : '前'}`
+
+  const month = Math.floor(day / 30)
+  if (month < 12) return `${month}个月${isFuture ? '后' : '前'}`
+
+  const year = Math.floor(month / 12)
+  return `${year}年${isFuture ? '后' : '前'}`
+}

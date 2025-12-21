@@ -22,10 +22,12 @@ export default function WatchlistPage() {
   }, [normalizedInput])
 
   const summaries = useMemo(() => {
+    const lastRunAtMs = polling.lastRunAtMs
     return watchlist.map((user) => {
       const trades = readJson<DataApiTrade[]>(`pmta.cache.trades.${user.toLowerCase()}`, [])
       const activity = readJson<DataApiActivity[]>(`pmta.cache.activity.${user.toLowerCase()}`, [])
       const positions = readJson<DataApiPosition[]>(`pmta.cache.positions.${user.toLowerCase()}`, [])
+      void lastRunAtMs
       return summarizeTrader(user, trades, activity, positions)
     })
   }, [polling.lastRunAtMs, watchlist])
@@ -35,7 +37,7 @@ export default function WatchlistPage() {
     if (!isEvmAddress(address)) return
     const normalized = address.toLowerCase()
     setSelectedUser(normalized)
-    navigate(`/trader/${normalized}`)
+    navigate(`/trader/${normalized}/overview`)
   }
 
   /** 将地址加入观察列表并跳转到详情页。 */
@@ -43,7 +45,7 @@ export default function WatchlistPage() {
     if (!isEvmAddress(address)) return
     const normalized = address.toLowerCase()
     addToWatchlist(normalized)
-    navigate(`/trader/${normalized}`)
+    navigate(`/trader/${normalized}/overview`)
   }
 
   return (

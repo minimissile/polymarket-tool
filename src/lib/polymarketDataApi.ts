@@ -77,6 +77,7 @@ type FetchJsonOptions = {
 }
 
 const BASE_URL = 'https://data-api.polymarket.com'
+const GAMMA_BASE_URL = 'https://gamma-api.polymarket.com'
 
 /** 以 JSON 方式请求 Data API，带超时与可选的 AbortSignal。 */
 async function fetchJson<T>(url: string, options?: FetchJsonOptions): Promise<T> {
@@ -116,6 +117,10 @@ function buildUrl(pathname: string, params: Record<string, string | number | boo
     url.searchParams.set(key, String(value))
   }
   return url.toString()
+}
+
+function buildGammaUrl(pathname: string) {
+  return new URL(`${GAMMA_BASE_URL}${pathname}`).toString()
 }
 
 /** 获取某个用户的成交（trades）。 */
@@ -193,4 +198,33 @@ export async function getPositionsByUser(
     sizeThreshold: params?.sizeThreshold,
   })
   return fetchJson<DataApiPosition[]>(url, options)
+}
+
+export type GammaMarket = {
+  id?: string
+  question?: string
+  conditionId?: string
+  slug?: string
+  description?: string
+  resolutionSource?: string
+  endDate?: string
+  endDateIso?: string
+  startDate?: string
+  startDateIso?: string
+  category?: string
+  image?: string
+  icon?: string
+  outcomes?: unknown
+  outcomePrices?: unknown
+  volumeNum?: number
+  liquidityNum?: number
+  active?: boolean
+  closed?: boolean
+}
+
+export async function getGammaMarketBySlug(slug: string, options?: FetchJsonOptions) {
+  const normalized = (slug ?? '').trim()
+  if (!normalized) throw new Error('slug 不能为空')
+  const url = buildGammaUrl(`/markets/slug/${encodeURIComponent(normalized)}`)
+  return fetchJson<GammaMarket>(url, options)
 }

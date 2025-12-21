@@ -34,6 +34,12 @@ function readCache<T>(key: string, fallback: T) {
   return readJson(key, fallback as never) as T
 }
 
+function tradeCacheKey(t: DataApiTrade) {
+  const hash = t.transactionHash?.trim()
+  if (hash) return `${t.timestamp}:${hash}`
+  return `${t.timestamp}:${t.asset}:${t.conditionId}:${t.side}:${t.outcomeIndex ?? ''}:${t.price}:${t.size}`
+}
+
 /** 拉取并缓存某交易员的 trades/activity/positions，并周期性轮询更新。 */
 export function useTraderData(user: string | undefined, options?: Options) {
   const enabled = options?.enabled ?? Boolean(user)
@@ -91,8 +97,8 @@ export function useTraderData(user: string | undefined, options?: Options) {
 
         if (!mounted) return
 
-        setState((prev) => {
-          const mergedTrades = mergeUniqueByKey(prev.data.trades, trades, (t) => `${t.timestamp}:${t.transactionHash ?? ''}:${t.asset}`, 2000)
+      setState((prev) => {
+          const mergedTrades = mergeUniqueByKey(prev.data.trades, trades, tradeCacheKey, 2000)
           const mergedActivity = mergeUniqueByKey(
             prev.data.activity,
             activity,

@@ -21,7 +21,7 @@ export default function DiscoverPage() {
   /** 将热门交易员加入观察列表，并跳转到其详情页。 */
   const onWatch = (user: string) => {
     addToWatchlist(user)
-    navigate(`/trader/${user.toLowerCase()}`)
+    navigate(`/trader/${user.toLowerCase()}/overview`)
   }
 
   return (

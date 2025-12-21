@@ -1,30 +1,29 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { getGammaMarketBySlug, type DataApiTrade, type GammaMarket } from '../lib/polymarketDataApi'
+import { getGammaMarketBySlug, type DataApiActivity, type GammaMarket } from '../lib/polymarketDataApi'
 import { formatDateTime, formatNumber, formatRelativeTime, formatUsd } from '../lib/format'
 
-/** 最近交易表格：按时间倒序展示，并支持关键词筛选。 */
-export function TradesTable(props: {
-  trades: DataApiTrade[]
-  maxRows?: number
-  features?: Partial<{
-    showOrderAmount: boolean
-    showIcon: boolean
-    showTradeType: boolean
-    showRelativeTime: boolean
-    highlightRecentTrades: boolean
-    enableMarketDetails: boolean
-  }>
-}) {
+type ActivityFeatures = Partial<{
+  showIcon: boolean
+  showRelativeTime: boolean
+  highlightRecent: boolean
+  enableMarketDetails: boolean
+}>
+
+type MarketDetailState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'ready'; data: GammaMarket }
+  | { status: 'error'; error: string }
+
+export function ActivitiesTable(props: { activity: DataApiActivity[]; maxRows?: number; features?: ActivityFeatures }) {
   const [query, setQuery] = useState('')
   const maxRows = props.maxRows ?? 100
 
   const features = useMemo(() => {
     return {
-      showOrderAmount: true,
       showIcon: true,
-      showTradeType: true,
       showRelativeTime: true,
-      highlightRecentTrades: true,
+      highlightRecent: true,
       enableMarketDetails: true,
       ...props.features,
     }
@@ -32,16 +31,10 @@ export function TradesTable(props: {
 
   const [nowMs, setNowMs] = useState(() => Date.now())
   useEffect(() => {
-    if (!features.showRelativeTime && !features.highlightRecentTrades) return
+    if (!features.showRelativeTime && !features.highlightRecent) return
     const id = window.setInterval(() => setNowMs(Date.now()), 1000)
     return () => window.clearInterval(id)
-  }, [features.highlightRecentTrades, features.showRelativeTime])
-
-  type MarketDetailState =
-    | { status: 'idle' }
-    | { status: 'loading' }
-    | { status: 'ready'; data: GammaMarket }
-    | { status: 'error'; error: string }
+  }, [features.highlightRecent, features.showRelativeTime])
 
   const [expandedBySlug, setExpandedBySlug] = useState<Record<string, boolean>>({})
   const [marketBySlug, setMarketBySlug] = useState<Record<string, MarketDetailState>>({})
@@ -52,7 +45,33 @@ export function TradesTable(props: {
     marketBySlugRef.current = marketBySlug
   }, [marketBySlug])
 
-  const colCount = 6 + (features.showOrderAmount ? 1 : 0) + (features.enableMarketDetails ? 1 : 0)
+  const colCount = 8 + (features.enableMarketDetails ? 1 : 0)
+
+  const parseMaybeArray = (value: unknown): unknown[] | undefined => {
+    if (!value) return undefined
+    if (Array.isArray(value)) return value
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value) as unknown
+        return Array.isArray(parsed) ? parsed : undefined
+      } catch {
+        return undefined
+      }
+    }
+    return undefined
+  }
+
+  const formatTimeCell = (epochSeconds: number) => {
+    const abs = formatDateTime(epochSeconds)
+    if (!features.showRelativeTime) return abs
+    return `${abs} ${formatRelativeTime(epochSeconds, nowMs)}`
+  }
+
+  const activityRowKey = (a: DataApiActivity) => {
+    const hash = a.transactionHash?.trim()
+    if (hash) return `${a.timestamp}:${hash}:${a.type}`
+    return `${a.timestamp}:${a.type}:${a.asset ?? ''}:${a.conditionId ?? ''}:${a.side ?? ''}:${a.outcomeIndex ?? ''}:${a.price ?? ''}:${a.size ?? ''}:${a.usdcSize ?? ''}`
+  }
 
   const fetchMarket = async (slug: string) => {
     const key = slug.toLowerCase()
@@ -75,108 +94,110 @@ export function TradesTable(props: {
 
   const toggleDetails = (slug: string) => {
     const key = slug.toLowerCase()
-    setExpandedBySlug((prev) => {
-      const next = !prev[key]
-      return { ...prev, [key]: next }
-    })
+    setExpandedBySlug((prev) => ({ ...prev, [key]: !prev[key] }))
     void fetchMarket(key)
-  }
-
-  const parseMaybeArray = (value: unknown): unknown[] | undefined => {
-    if (!value) return undefined
-    if (Array.isArray(value)) return value
-    if (typeof value === 'string') {
-      try {
-        const parsed = JSON.parse(value) as unknown
-        return Array.isArray(parsed) ? parsed : undefined
-      } catch {
-        return undefined
-      }
-    }
-    return undefined
-  }
-
-  const formatTimeCell = (epochSeconds: number) => {
-    const abs = formatDateTime(epochSeconds)
-    if (!features.showRelativeTime) return abs
-    return `${abs} ${formatRelativeTime(epochSeconds, nowMs)}`
-  }
-
-  const tradeRowKey = (t: DataApiTrade) => {
-    const hash = t.transactionHash?.trim()
-    if (hash) return `${t.timestamp}:${hash}`
-    return `${t.timestamp}:${t.asset}:${t.conditionId}:${t.side}:${t.outcomeIndex ?? ''}:${t.price}:${t.size}`
   }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const list = props.trades.slice().sort((a, b) => b.timestamp - a.timestamp)
+    const list = props.activity.slice().sort((a, b) => b.timestamp - a.timestamp)
     if (!q) return list.slice(0, maxRows)
+
     return list
-      .filter((t) => {
-        const title = (t.title ?? '').toLowerCase()
-        const slug = (t.slug ?? '').toLowerCase()
-        const outcome = (t.outcome ?? '').toLowerCase()
-        return (
-          title.includes(q) ||
-          slug.includes(q) ||
-          outcome.includes(q) ||
-          t.conditionId.toLowerCase().includes(q)
-        )
+      .filter((a) => {
+        const title = (a.title ?? '').toLowerCase()
+        const slug = (a.slug ?? '').toLowerCase()
+        const outcome = (a.outcome ?? '').toLowerCase()
+        const type = (a.type ?? '').toLowerCase()
+        const conditionId = (a.conditionId ?? '').toLowerCase()
+        return title.includes(q) || slug.includes(q) || outcome.includes(q) || type.includes(q) || conditionId.includes(q)
       })
       .slice(0, maxRows)
-  }, [maxRows, props.trades, query])
+  }, [maxRows, props.activity, query])
 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex gap-3 items-center">
-        <h2 className="text-base font-semibold text-slate-900 dark:text-slate-50 mb-4">最近交易</h2>
+        <h2 className="text-base font-semibold text-slate-900 dark:text-slate-50 mb-4">账户活动流水</h2>
         <input
           className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-50 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 focus:border-blue-500 transition-all mb-4"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="筛选：标题 / 市场 / outcome / conditionId"
-          aria-label="筛选最近交易"
+          placeholder="筛选：标题 / 市场 / type / conditionId"
+          aria-label="筛选账户活动流水"
         />
       </div>
+
       {filtered.length === 0 ? (
-        <div className="p-8 text-center text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">暂无交易</div>
+        <div className="p-8 text-center text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
+          暂无活动
+        </div>
       ) : (
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-x-auto shadow-sm" role="region" aria-label="最近交易表格">
-          <table className="w-full border-collapse text-sm min-w-[980px]">
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-x-auto shadow-sm" role="region" aria-label="账户活动流水表格">
+          <table className="w-full border-collapse text-sm min-w-[1100px]">
             <thead>
               <tr>
-                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">时间</th>
-                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">交易类型</th>
-                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">市场</th>
-                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">Outcome</th>
-                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">价格</th>
-                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">数量</th>
-                {features.showOrderAmount ? (
-                  <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">下单金额</th>
-                ) : null}
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                  时间
+                </th>
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                  类型
+                </th>
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                  方向
+                </th>
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                  市场
+                </th>
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                  Outcome
+                </th>
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                  USDC
+                </th>
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                  价格
+                </th>
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                  数量
+                </th>
                 {features.enableMarketDetails ? (
-                  <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">操作</th>
+                  <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                    操作
+                  </th>
                 ) : null}
               </tr>
             </thead>
             <tbody>
-              {filtered.map((t) => {
-                const rowKey = tradeRowKey(t)
-                const slug = (t.slug ?? '').trim()
+              {filtered.map((a) => {
+                const rowKey = activityRowKey(a)
+                const slug = (a.slug ?? '').trim()
                 const slugKey = slug.toLowerCase()
                 const expanded = Boolean(slugKey && expandedBySlug[slugKey])
                 const marketState: MarketDetailState | undefined = slugKey ? marketBySlug[slugKey] : undefined
-                const ageSec = nowMs / 1000 - t.timestamp
-                const isRecent = features.highlightRecentTrades && ageSec >= 0 && ageSec <= 300
 
-                const sideLabel = t.side === 'BUY' ? '买入' : '卖出'
+                const ageSec = nowMs / 1000 - a.timestamp
+                const isRecent = features.highlightRecent && ageSec >= 0 && ageSec <= 300
+
+                const typeBadge =
+                  a.type === 'TRADE'
+                    ? 'bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800'
+                    : 'bg-slate-50 text-slate-700 border-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+
+                const sideLabel = a.side === 'BUY' ? '买入' : a.side === 'SELL' ? '卖出' : '—'
                 const sideBadge =
-                  t.side === 'BUY'
+                  a.side === 'BUY'
                     ? 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800'
-                    : 'bg-red-50 text-red-700 border-red-100 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800'
+                    : a.side === 'SELL'
+                      ? 'bg-red-50 text-red-700 border-red-100 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800'
+                      : 'bg-slate-50 text-slate-500 border-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
 
-                const orderAmountUsd = (t.size ?? 0) * (t.price ?? 0)
+                const usdc =
+                  a.usdcSize !== undefined
+                    ? a.usdcSize
+                    : a.size !== undefined && a.price !== undefined
+                      ? a.size * a.price
+                      : undefined
 
                 const outcomes = marketState?.status === 'ready' ? parseMaybeArray(marketState.data.outcomes) : undefined
                 const outcomePrices = marketState?.status === 'ready' ? parseMaybeArray(marketState.data.outcomePrices) : undefined
@@ -184,7 +205,6 @@ export function TradesTable(props: {
                 return (
                   <Fragment key={rowKey}>
                     <tr
-                      key={rowKey}
                       className={`hover:bg-slate-50 dark:hover:bg-slate-700/50 ${isRecent ? 'bg-amber-50/70 dark:bg-amber-900/15 border-l-4 border-amber-400 dark:border-amber-600' : ''}`}
                     >
                       <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 align-middle font-mono text-xs whitespace-nowrap">
@@ -194,21 +214,27 @@ export function TradesTable(props: {
                               NEW
                             </span>
                           ) : null}
-                          <span>{formatTimeCell(t.timestamp)}</span>
+                          <span>{formatTimeCell(a.timestamp)}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 align-middle">
+
+                      <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 align-middle whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full border text-xs font-semibold ${typeBadge}`}>{a.type}</span>
+                      </td>
+
+                      <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 align-middle whitespace-nowrap">
                         <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border text-xs font-semibold ${sideBadge}`}>
-                          <span aria-hidden>{t.side === 'BUY' ? '↑' : '↓'}</span>
-                          {features.showTradeType ? sideLabel : t.side}
+                          {a.side === 'BUY' ? <span aria-hidden>↑</span> : a.side === 'SELL' ? <span aria-hidden>↓</span> : null}
+                          {sideLabel}
                         </span>
                       </td>
+
                       <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 align-middle min-w-[340px]">
                         <div className="flex items-center gap-2 min-w-0">
-                          {features.showIcon && t.icon ? (
+                          {features.showIcon && a.icon ? (
                             <img
-                              src={t.icon}
-                              alt={t.title ? `${t.title} icon` : 'market icon'}
+                              src={a.icon}
+                              alt={a.title ? `${a.title} icon` : 'market icon'}
                               loading="lazy"
                               referrerPolicy="no-referrer"
                               className="w-5 h-5 rounded object-cover border border-slate-200 dark:border-slate-700"
@@ -218,31 +244,34 @@ export function TradesTable(props: {
                             />
                           ) : null}
                           <div className="min-w-0">
-                            <div className="truncate" title={t.title ?? t.conditionId}>
-                              {t.title ?? `${t.conditionId.slice(0, 10)}…`}
+                            <div className="truncate" title={a.title ?? a.conditionId ?? rowKey}>
+                              {a.title ?? (a.conditionId ? `${a.conditionId.slice(0, 10)}…` : '—')}
                             </div>
-                            {t.slug ? (
-                              <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate" title={t.slug}>
-                                {t.slug}
+                            {a.slug ? (
+                              <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate" title={a.slug}>
+                                {a.slug}
                               </div>
                             ) : null}
                           </div>
                         </div>
                       </td>
+
                       <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 align-middle whitespace-nowrap">
-                        {t.outcome ?? '—'}
+                        {a.outcome ?? '—'}
                       </td>
+
                       <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 align-middle font-mono whitespace-nowrap">
-                        {formatNumber(t.price, { maximumFractionDigits: 4 })}
+                        {usdc === undefined ? '—' : formatUsd(usdc)}
                       </td>
+
                       <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 align-middle font-mono whitespace-nowrap">
-                        {formatNumber(t.size, { maximumFractionDigits: 2 })}
+                        {a.price === undefined ? '—' : formatNumber(a.price, { maximumFractionDigits: 4 })}
                       </td>
-                      {features.showOrderAmount ? (
-                        <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 align-middle font-mono whitespace-nowrap">
-                          {formatUsd(orderAmountUsd)}
-                        </td>
-                      ) : null}
+
+                      <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 align-middle font-mono whitespace-nowrap">
+                        {a.size === undefined ? '—' : formatNumber(a.size, { maximumFractionDigits: 2 })}
+                      </td>
+
                       {features.enableMarketDetails ? (
                         <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 align-middle whitespace-nowrap">
                           <button
@@ -251,7 +280,7 @@ export function TradesTable(props: {
                             disabled={!slug}
                             aria-label={slug ? `查看 ${slug} 市场详情` : '缺少 slug，无法查看详情'}
                             aria-expanded={expanded}
-                            aria-controls={slug ? `tradeDetails:${slugKey}` : undefined}
+                            aria-controls={slug ? `activityDetails:${slugKey}` : undefined}
                           >
                             {expanded ? '收起' : '详情'}
                           </button>
@@ -260,11 +289,8 @@ export function TradesTable(props: {
                     </tr>
 
                     {features.enableMarketDetails && slugKey && expanded ? (
-                      <tr key={`${rowKey}:details`} id={`tradeDetails:${slugKey}`}>
-                        <td
-                          colSpan={colCount}
-                          className="px-4 py-4 border-b border-slate-100 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-900/20"
-                        >
+                      <tr id={`activityDetails:${slugKey}`}>
+                        <td colSpan={colCount} className="px-4 py-4 border-b border-slate-100 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-900/20">
                           {marketState?.status === 'loading' ? (
                             <div className="text-sm text-slate-500 dark:text-slate-400">加载详情中…</div>
                           ) : marketState?.status === 'error' ? (
@@ -287,9 +313,7 @@ export function TradesTable(props: {
                                   <div className="text-sm font-semibold text-slate-900 dark:text-slate-50 truncate" title={marketState.data.question ?? slugKey}>
                                     {marketState.data.question ?? slugKey}
                                   </div>
-                                  <div className="text-xs text-slate-500 dark:text-slate-400 font-mono break-all">
-                                    slug: {slugKey}
-                                  </div>
+                                  <div className="text-xs text-slate-500 dark:text-slate-400 font-mono break-all">slug: {slugKey}</div>
                                 </div>
                                 <a
                                   className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline whitespace-nowrap"
@@ -363,9 +387,7 @@ export function TradesTable(props: {
                               ) : null}
 
                               {marketState.data.description ? (
-                                <div className="text-xs text-slate-500 dark:text-slate-400 whitespace-pre-wrap">
-                                  {marketState.data.description}
-                                </div>
+                                <div className="text-xs text-slate-500 dark:text-slate-400 whitespace-pre-wrap">{marketState.data.description}</div>
                               ) : null}
                             </div>
                           ) : (
@@ -384,3 +406,4 @@ export function TradesTable(props: {
     </div>
   )
 }
+

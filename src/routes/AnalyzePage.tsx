@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AddressBar } from '../components/AddressBar'
 import { PositionsTable } from '../components/PositionsTable'
 import { TraderCharts } from '../components/TraderCharts'
 import { TradesTable } from '../components/TradesTable'
+import { ActivitiesTable } from '../components/ActivitiesTable.tsx'
 import { inferTraderProfile, summarizeTrader } from '../lib/analytics'
 import { formatDateTime, formatNumber, formatPercent, formatUsd } from '../lib/format'
 import { readJson, writeJson } from '../lib/storage'
@@ -25,13 +26,21 @@ function resolveUser(paramUser: string | undefined, searchUser: string | null, f
 /** 分析页：输入地址并跳转到详情；展示交易、持仓、活动统计与图表。 */
 export default function AnalyzePage() {
   const navigate = useNavigate()
-  const params = useParams<{ user?: string }>()
+  const params = useParams<{ user?: string; tab?: string }>()
   const [searchParams] = useSearchParams()
   const { selectedUser, setSelectedUser, lastSeenByUser, markTradesAsSeen, addToWatchlist } = useAppState()
 
   const routeUser = useMemo(() => {
     return resolveUser(params.user, searchParams.get('user'), selectedUser)
   }, [params.user, searchParams, selectedUser])
+
+  useEffect(() => {
+    if (!routeUser) return
+    if (!params.user) return
+    const tab = (params.tab ?? 'overview').toLowerCase()
+    const valid = tab === 'overview' || tab === 'positions' || tab === 'trades' || tab === 'activity'
+    if (!valid || !params.tab) navigate(`/trader/${routeUser}/overview`, { replace: true })
+  }, [navigate, params.tab, params.user, routeUser])
 
   const [addressInput, setAddressInput] = useState(() => {
     if (routeUser) return routeUser
@@ -43,24 +52,53 @@ export default function AnalyzePage() {
   const inputValid = useMemo(() => isEvmAddress(normalizedInput), [normalizedInput])
 
   const selected = useTraderData(routeUser, { enabled: Boolean(routeUser), pollMs: 12_000 })
+  const lastNotifiedLatestTradeTsRef = useRef(0)
 
   const activeTab = useMemo(() => {
-    const raw = (searchParams.get('tab') ?? 'overview').toLowerCase()
+    const raw = (params.tab ?? 'overview').toLowerCase()
     if (raw === 'positions') return 'positions'
     if (raw === 'trades') return 'trades'
+    if (raw === 'activity') return 'activity'
     return 'overview'
-  }, [searchParams])
+  }, [params.tab])
 
   useEffect(() => {
     writeJson('pmta.lastAddressInput', normalizedInput as never)
   }, [normalizedInput])
+
+  useEffect(() => {
+    if (!routeUser) {
+      lastNotifiedLatestTradeTsRef.current = 0
+      return
+    }
+    const latestTs = selected.data.trades.reduce((acc, t) => Math.max(acc, t.timestamp), 0)
+    if (!latestTs) return
+    if (lastNotifiedLatestTradeTsRef.current === 0) {
+      lastNotifiedLatestTradeTsRef.current = latestTs
+      return
+    }
+    if (latestTs <= lastNotifiedLatestTradeTsRef.current) return
+    const nowSec = Date.now() / 1000
+    if (nowSec - latestTs > 300) {
+      lastNotifiedLatestTradeTsRef.current = latestTs
+      return
+    }
+    const newCount = selected.data.trades.filter((t) => t.timestamp > lastNotifiedLatestTradeTsRef.current).length
+    lastNotifiedLatestTradeTsRef.current = latestTs
+    const short = `${routeUser.slice(0, 6)}…${routeUser.slice(-4)}`
+    window.dispatchEvent(
+      new CustomEvent('pmta:notify', {
+        detail: { message: `检测到新交易：${short} ${newCount} 笔` },
+      }),
+    )
+  }, [routeUser, selected.data.trades])
 
   /** 校验并跳转到交易员详情页，同时更新全局选中地址。 */
   const onAnalyze = (address: string) => {
     if (!isEvmAddress(address)) return
     const normalized = address.toLowerCase()
     setSelectedUser(normalized)
-    navigate(`/trader/${normalized}`)
+    navigate(`/trader/${normalized}/overview`)
   }
 
   /** 把地址加入观察列表，并跳转到交易员详情页。 */
@@ -68,7 +106,7 @@ export default function AnalyzePage() {
     if (!isEvmAddress(address)) return
     const normalized = address.toLowerCase()
     addToWatchlist(normalized)
-    navigate(`/trader/${normalized}`)
+    navigate(`/trader/${normalized}/overview`)
   }
 
   const selectedSummary = useMemo(() => {
@@ -98,12 +136,10 @@ export default function AnalyzePage() {
   }
 
   /** 切换模块 Tab，并写入 URL 查询参数，便于分享/刷新后保持一致。 */
-  const setTab = (next: 'overview' | 'positions' | 'trades') => {
+  const setTab = (next: 'overview' | 'positions' | 'trades' | 'activity') => {
     const user = routeUser
     if (!user) return
-    const nextParams = new URLSearchParams(searchParams)
-    nextParams.set('tab', next)
-    navigate(`/trader/${user}?${nextParams.toString()}`, { replace: true })
+    navigate(`/trader/${user}/${next}`, { replace: true })
   }
 
   return (
@@ -194,6 +230,16 @@ export default function AnalyzePage() {
               >
                 交易
               </button>
+              <button
+                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'activity' ? 'border-slate-900 text-slate-900 dark:border-slate-50 dark:text-slate-50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300 dark:hover:border-slate-600'}`}
+                onClick={() => setTab('activity')}
+                role="tab"
+                aria-selected={activeTab === 'activity'}
+                aria-controls="tabPanelActivity"
+                id="tabActivity"
+              >
+                流水
+              </button>
             </div>
           </div>
 
@@ -272,13 +318,19 @@ export default function AnalyzePage() {
 
           {activeTab === 'positions' ? (
             <section role="tabpanel" id="tabPanelPositions" aria-labelledby="tabPositions">
-              <PositionsTable positions={selected.data.positions} />
+              <PositionsTable positions={selected.data.positions} trades={selected.data.trades} />
             </section>
           ) : null}
 
           {activeTab === 'trades' ? (
-            <section role="tabpanel" id="tabPanelTrades" aria-labelledby="tabTrades">
+            <section role="tabpanel" id="tabPanelTrades" aria-labelledby="tabTrades" className="flex flex-col gap-8">
               <TradesTable trades={selected.data.trades} />
+            </section>
+          ) : null}
+
+          {activeTab === 'activity' ? (
+            <section role="tabpanel" id="tabPanelActivity" aria-labelledby="tabActivity" className="flex flex-col gap-8">
+              <ActivitiesTable activity={selected.data.activity} />
             </section>
           ) : null}
         </>

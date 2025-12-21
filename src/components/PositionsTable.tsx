@@ -1,15 +1,32 @@
 import { useMemo, useState } from 'react'
-import type { DataApiPosition } from '../lib/polymarketDataApi'
+import type { DataApiPosition, DataApiTrade } from '../lib/polymarketDataApi'
 import { formatPercent, formatUsd } from '../lib/format'
 
 /** 当前持仓表格：展示 Data-API Positions，并支持关键词筛选。 */
-export function PositionsTable(props: { positions: DataApiPosition[]; maxRows?: number }) {
+export function PositionsTable(props: { positions: DataApiPosition[]; trades?: DataApiTrade[]; maxRows?: number }) {
   const [query, setQuery] = useState('')
   const maxRows = props.maxRows ?? 50
 
+  const lastTradeTsByCondition = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const t of props.trades ?? []) {
+      const key = t.conditionId.toLowerCase()
+      map[key] = Math.max(map[key] ?? 0, t.timestamp)
+    }
+    return map
+  }, [props.trades])
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const list = props.positions.slice()
+    const list = props.positions
+      .slice()
+      .sort((a, b) => {
+        const ta = lastTradeTsByCondition[a.conditionId.toLowerCase()] ?? 0
+        const tb = lastTradeTsByCondition[b.conditionId.toLowerCase()] ?? 0
+        if (tb !== ta) return tb - ta
+        return b.currentValue - a.currentValue
+      })
+
     if (!q) return list.slice(0, maxRows)
     return list
       .filter((p) => {
@@ -19,7 +36,7 @@ export function PositionsTable(props: { positions: DataApiPosition[]; maxRows?: 
         return title.includes(q) || slug.includes(q) || outcome.includes(q) || p.conditionId.toLowerCase().includes(q)
       })
       .slice(0, maxRows)
-  }, [maxRows, props.positions, query])
+  }, [lastTradeTsByCondition, maxRows, props.positions, query])
 
   return (
     <div className="flex flex-col gap-2">

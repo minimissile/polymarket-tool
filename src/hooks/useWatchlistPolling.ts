@@ -15,6 +15,12 @@ function readCache<T>(key: string, fallback: T) {
   return readJson(key, fallback as never) as T
 }
 
+function tradeCacheKey(t: DataApiTrade) {
+  const hash = t.transactionHash?.trim()
+  if (hash) return `${t.timestamp}:${hash}`
+  return `${t.timestamp}:${t.asset}:${t.conditionId}:${t.side}:${t.outcomeIndex ?? ''}:${t.price}:${t.size}`
+}
+
 /** 对观察列表进行后台轮询更新：写入本地缓存，并暴露状态与手动 refresh。 */
 export function useWatchlistPolling(users: string[], options?: { enabled?: boolean; pollMs?: number }) {
   const enabled = options?.enabled ?? true
@@ -49,7 +55,7 @@ export function useWatchlistPolling(users: string[], options?: { enabled?: boole
         const mergedTrades = mergeUniqueByKey(
           readCache<DataApiTrade[]>(storageKey('trades', normalizedUser), []),
           trades,
-          (t) => `${t.timestamp}:${t.transactionHash ?? ''}:${t.asset}`,
+          tradeCacheKey,
           2000,
         )
         const mergedActivity = mergeUniqueByKey(
@@ -78,10 +84,11 @@ export function useWatchlistPolling(users: string[], options?: { enabled?: boole
   useEffect(() => {
     if (!shouldRun) return
 
-    void run()
+    const kickoffId = window.setTimeout(() => void run(), 0)
     const id = window.setInterval(() => void run(), pollMs)
 
     return () => {
+      window.clearTimeout(kickoffId)
       window.clearInterval(id)
       abortRef.current?.abort()
     }
