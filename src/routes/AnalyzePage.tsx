@@ -4,7 +4,8 @@ import { AddressBar } from '../components/AddressBar'
 import { PositionsTable } from '../components/PositionsTable'
 import { TraderCharts } from '../components/TraderCharts'
 import { TradesTable } from '../components/TradesTable'
-import { ActivitiesTable } from '../components/ActivitiesTable.tsx'
+import { ActivitiesTable } from '../components/ActivitiesTable'
+import { CopyTradeSimulator } from '../components/CopyTradeSimulator'
 import { inferTraderProfile, summarizeTrader } from '../lib/analytics'
 import { formatDateTime, formatNumber, formatPercent, formatUsd } from '../lib/format'
 import { readJson, writeJson } from '../lib/storage'
@@ -38,7 +39,7 @@ export default function AnalyzePage() {
     if (!routeUser) return
     if (!params.user) return
     const tab = (params.tab ?? 'overview').toLowerCase()
-    const valid = tab === 'overview' || tab === 'positions' || tab === 'trades' || tab === 'activity'
+    const valid = tab === 'overview' || tab === 'positions' || tab === 'trades' || tab === 'activity' || tab === 'copy'
     if (!valid || !params.tab) navigate(`/trader/${routeUser}/overview`, { replace: true })
   }, [navigate, params.tab, params.user, routeUser])
 
@@ -59,6 +60,7 @@ export default function AnalyzePage() {
     if (raw === 'positions') return 'positions'
     if (raw === 'trades') return 'trades'
     if (raw === 'activity') return 'activity'
+    if (raw === 'copy') return 'copy'
     return 'overview'
   }, [params.tab])
 
@@ -136,7 +138,7 @@ export default function AnalyzePage() {
   }
 
   /** 切换模块 Tab，并写入 URL 查询参数，便于分享/刷新后保持一致。 */
-  const setTab = (next: 'overview' | 'positions' | 'trades' | 'activity') => {
+  const setTab = (next: 'overview' | 'positions' | 'trades' | 'activity' | 'copy') => {
     const user = routeUser
     if (!user) return
     navigate(`/trader/${user}/${next}`, { replace: true })
@@ -240,6 +242,16 @@ export default function AnalyzePage() {
               >
                 流水
               </button>
+              <button
+                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'copy' ? 'border-slate-900 text-slate-900 dark:border-slate-50 dark:text-slate-50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300 dark:hover:border-slate-600'}`}
+                onClick={() => setTab('copy')}
+                role="tab"
+                aria-selected={activeTab === 'copy'}
+                aria-controls="tabPanelCopy"
+                id="tabCopy"
+              >
+                跟单
+              </button>
             </div>
           </div>
 
@@ -331,6 +343,12 @@ export default function AnalyzePage() {
           {activeTab === 'activity' ? (
             <section role="tabpanel" id="tabPanelActivity" aria-labelledby="tabActivity" className="flex flex-col gap-8">
               <ActivitiesTable activity={selected.data.activity} />
+            </section>
+          ) : null}
+
+          {activeTab === 'copy' ? (
+            <section role="tabpanel" id="tabPanelCopy" aria-labelledby="tabCopy" className="flex flex-col gap-8">
+              <CopyTradeSimulator user={routeUser} trades={selected.data.trades} activity={selected.data.activity} status={selected.status} error={selected.error} />
             </section>
           ) : null}
         </>
