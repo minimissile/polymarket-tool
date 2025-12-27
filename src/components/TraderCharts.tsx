@@ -173,7 +173,7 @@ export function TraderCharts(props: {
           )}
         </ChartCard>
       </div>
-      <ChartCard title="资金曲线（Trade 现金流净值）">
+      <ChartCard title="累计净现金流（TRADE，近似）">
         {props.activity.length === 0 ? (
           <div className="p-8 text-center text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">暂无活动数据</div>
         ) : (

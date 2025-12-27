@@ -384,20 +384,25 @@ export function CopyTradeSimulator(props: {
   const traderCurve = useMemo(() => buildEquityCurveFromActivity(props.activity), [props.activity])
 
   const curveOption = useMemo(() => {
-    const simSeries = sim.equity.map((p) => [p.ts * 1000, p.equityUsd])
-    const traderSeries = traderCurve.map((p) => [p.ts * 1000, p.balanceUsd])
+    const liveStartMs = liveStartTs ? liveStartTs * 1000 : undefined
+    const simSeries = sim.equity
+      .map((p) => [p.ts * 1000, p.equityUsd] as [number, number])
+      .filter((p) => (liveStartMs ? p[0] >= liveStartMs : true))
+    const traderSeries = traderCurve
+      .map((p) => [p.ts * 1000, p.balanceUsd] as [number, number])
+      .filter((p) => (liveStartMs ? p[0] >= liveStartMs : true))
     return {
       tooltip: { trigger: 'axis' },
-      legend: { data: ['跟单模拟', '交易员现金流(近似)'] },
+      legend: { data: ['跟单权益(含持仓估值)', '交易员净现金流(近似)'] },
       grid: { left: 60, right: 20, top: 40, bottom: 40 },
-      xAxis: { type: 'time' },
+      xAxis: { type: 'time', min: liveStartMs },
       yAxis: { type: 'value' },
       series: [
-        { name: '跟单模拟', type: 'line', showSymbol: false, data: simSeries, smooth: true },
-        { name: '交易员现金流(近似)', type: 'line', showSymbol: false, data: traderSeries, smooth: true },
+        { name: '跟单权益(含持仓估值)', type: 'line', showSymbol: false, data: simSeries, smooth: true },
+        { name: '交易员净现金流(近似)', type: 'line', showSymbol: false, data: traderSeries, smooth: true },
       ],
     }
-  }, [sim.equity, traderCurve])
+  }, [liveStartTs, sim.equity, traderCurve])
 
   const heatmapOption = useMemo(() => {
     const values = sim.pnlHeatmap.map((c) => ({ value: [c.hour, c.day, Math.abs(c.value)] as [number, number, number], raw: c.value }))
@@ -846,7 +851,7 @@ export function CopyTradeSimulator(props: {
       </ChartCard>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ChartCard title="资金曲线对比（交易员 vs 跟单模拟）">
+        <ChartCard title="曲线对比（跟单权益 vs 交易员净现金流）" right="卖出为 +，买入为 −；净买入会向下">
           {sim.equity.length <= 1 ? (
             <div className="p-8 text-center text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
               暂无可用曲线
@@ -906,7 +911,7 @@ export function CopyTradeSimulator(props: {
                     卖出价
                   </th>
                   <th className="text-right px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
-                    交易金额（USDC）
+                    成交额（USDC）
                   </th>
                   <th className="text-right px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
                     已实现盈亏
@@ -938,7 +943,7 @@ export function CopyTradeSimulator(props: {
                       {formatNumber(r.exitPrice, { maximumFractionDigits: 4 })}
                     </td>
                     <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 align-middle font-mono whitespace-nowrap text-right">
-                      {formatUsdPrecise(calcNotionalUsd(r.qty, r.entryPrice))}
+                      {formatUsdPrecise(calcNotionalUsd(r.qty, r.exitPrice))}
                     </td>
                     <td className={`px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 align-middle font-mono whitespace-nowrap text-right ${r.pnlUsd >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
                       {formatUsdPrecise(r.pnlUsd)}
