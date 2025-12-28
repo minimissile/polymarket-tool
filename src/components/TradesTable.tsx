@@ -288,7 +288,7 @@ export function TradesTable(props: {
                               alt={t.title ? `${t.title} icon` : 'market icon'}
                               loading="lazy"
                               referrerPolicy="no-referrer"
-                              className="w-5 h-5 rounded object-cover border border-slate-200 dark:border-slate-700"
+                              className="w-7 h-7 rounded object-cover border border-slate-200 dark:border-slate-700"
                               onError={(e) => {
                                 e.currentTarget.style.display = 'none'
                               }}
@@ -306,7 +306,7 @@ export function TradesTable(props: {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 align-middle whitespace-nowrap">
+                      <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 align-middle whitespace-nowrap font-semibold">
                         {t.outcome ?? '—'}
                       </td>
                       <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 align-middle font-mono whitespace-nowrap">

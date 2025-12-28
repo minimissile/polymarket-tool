@@ -77,6 +77,9 @@ export default function MarketPage() {
   const clobPriceByAssetIdRef = useRef<Record<string, { bestBid?: number; bestAsk?: number; lastTrade?: number }>>({})
   const clobPriceFlushIdRef = useRef<number | null>(null)
   const [clobPriceVersion, setClobPriceVersion] = useState(0)
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false)
+  const [isDescriptionOverflowing, setIsDescriptionOverflowing] = useState(false)
+  const descriptionRef = useRef<HTMLDivElement | null>(null)
 
   const commitMarket = (next: MarketState) => {
     marketRef.current = next
@@ -112,6 +115,9 @@ export default function MarketPage() {
 
   useEffect(() => {
     if (!slugKey) return
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    setIsDescriptionExpanded(false)
+    setIsDescriptionOverflowing(false)
     void Promise.resolve().then(() => fetchMarket({ silent: false, preferFresh: true }))
     const id = window.setInterval(() => {
       void fetchMarket({ silent: true, preferFresh: false })
@@ -122,6 +128,29 @@ export default function MarketPage() {
       marketInFlightRef.current = false
     }
   }, [fetchMarket, slugKey])
+
+  useEffect(() => {
+    if (market.status !== 'ready') {
+      setIsDescriptionOverflowing(false)
+      return
+    }
+    if (!market.data.description) {
+      setIsDescriptionOverflowing(false)
+      return
+    }
+    if (isDescriptionExpanded) {
+      setIsDescriptionOverflowing(true)
+      return
+    }
+    const el = descriptionRef.current
+    if (!el) return
+
+    const id = window.requestAnimationFrame(() => {
+      const next = el.scrollHeight > el.clientHeight + 1
+      setIsDescriptionOverflowing(next)
+    })
+    return () => window.cancelAnimationFrame(id)
+  }, [market, isDescriptionExpanded])
 
   const tradesInMarket = useMemo(() => {
     if (!slugKey) return []
@@ -340,6 +369,29 @@ export default function MarketPage() {
     return clobPriceByAssetIdRef.current
   }, [clobPriceVersion])
 
+  const traderLivePnl = useMemo(() => {
+    let pnlUsd = 0
+    let basisUsd = 0
+    let pricedCount = 0
+
+    for (const t of tradesInMarket) {
+      const live = latestPricesByAssetId[t.asset]
+      const closePrice = t.side === 'BUY' ? live?.bestBid : live?.bestAsk
+      if (closePrice === undefined) continue
+      if (t.price === undefined || t.size === undefined) continue
+      if (!(t.price > 0) || !(t.size > 0)) continue
+
+      const notional = t.price * t.size
+      const tradePnl = t.side === 'BUY' ? (closePrice - t.price) * t.size : (t.price - closePrice) * t.size
+      pnlUsd += tradePnl
+      basisUsd += notional
+      pricedCount += 1
+    }
+
+    const pnlPct = basisUsd > 0 ? pnlUsd / basisUsd : undefined
+    return { pnlUsd, pnlPct, pricedCount }
+  }, [latestPricesByAssetId, tradesInMarket])
+
   const goBack = () => {
     if (routeUser) {
       navigate(`/trader/${routeUser}/trades`)
@@ -525,7 +577,38 @@ export default function MarketPage() {
               ) : null}
 
               {market.data.description ? (
-                <div className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{market.data.description}</div>
+                <div className="flex flex-col gap-2">
+                  <div
+                    id="marketDescription"
+                    ref={descriptionRef}
+                    className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap break-words"
+                    style={
+                      isDescriptionExpanded
+                        ? undefined
+                        : {
+                            display: '-webkit-box',
+                            WebkitLineClamp: 3,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                          }
+                    }
+                  >
+                    {market.data.description}
+                  </div>
+                  {isDescriptionOverflowing ? (
+                    <div>
+                      <button
+                        type="button"
+                        className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline"
+                        onClick={() => setIsDescriptionExpanded((v) => !v)}
+                        aria-expanded={isDescriptionExpanded}
+                        aria-controls="marketDescription"
+                      >
+                        {isDescriptionExpanded ? '收起' : '查看全部'}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
             </div>
           ) : (
@@ -536,7 +619,7 @@ export default function MarketPage() {
 
           <h2 className="text-base font-semibold text-slate-900 dark:text-slate-50">交易员统计</h2>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
             <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
               <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">本市场交易数</div>
               <div className="text-xl md:text-2xl font-bold font-mono text-slate-900 dark:text-slate-50">{tradesInMarket.length}</div>
@@ -552,6 +635,40 @@ export default function MarketPage() {
             <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
               <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">本市场流水金额（估算）</div>
               <div className="text-xl md:text-2xl font-bold font-mono text-slate-900 dark:text-slate-50">{formatUsd(activityVolumeUsd)}</div>
+            </div>
+            <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+              <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">实时收益</div>
+              <div
+                className={`text-xl md:text-2xl font-bold font-mono ${
+                  traderLivePnl.pricedCount === 0
+                    ? 'text-slate-900 dark:text-slate-50'
+                    : traderLivePnl.pnlUsd > 0
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : traderLivePnl.pnlUsd < 0
+                        ? 'text-red-600 dark:text-red-400'
+                        : 'text-slate-900 dark:text-slate-50'
+                }`}
+              >
+                {traderLivePnl.pricedCount === 0 ? '—' : formatUsd(traderLivePnl.pnlUsd)}
+              </div>
+            </div>
+            <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+              <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">实时收益率</div>
+              <div
+                className={`text-xl md:text-2xl font-bold font-mono ${
+                  traderLivePnl.pricedCount === 0
+                    ? 'text-slate-900 dark:text-slate-50'
+                    : (traderLivePnl.pnlPct ?? 0) > 0
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : (traderLivePnl.pnlPct ?? 0) < 0
+                        ? 'text-red-600 dark:text-red-400'
+                        : 'text-slate-900 dark:text-slate-50'
+                }`}
+              >
+                {traderLivePnl.pricedCount === 0 || traderLivePnl.pnlPct === undefined
+                  ? '—'
+                  : `${formatNumber(traderLivePnl.pnlPct * 100, { maximumFractionDigits: 2 })}%`}
+              </div>
             </div>
           </div>
 

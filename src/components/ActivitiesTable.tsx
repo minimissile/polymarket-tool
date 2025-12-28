@@ -290,7 +290,7 @@ export function ActivitiesTable(props: {
                               alt={a.title ? `${a.title} icon` : 'market icon'}
                               loading="lazy"
                               referrerPolicy="no-referrer"
-                              className="w-5 h-5 rounded object-cover border border-slate-200 dark:border-slate-700"
+                              className="w-7 h-7 rounded object-cover border border-slate-200 dark:border-slate-700"
                               onError={(e) => {
                                 e.currentTarget.style.display = 'none'
                               }}
