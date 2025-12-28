@@ -51,6 +51,15 @@ export function ActivitiesTable(props: {
     return () => window.clearInterval(id)
   }, [features.highlightRecent, features.showRelativeTime])
 
+  const lastUpdatedEpochSeconds = useMemo(() => {
+    let latest = 0
+    for (const a of props.activity) {
+      const ts = a.timestamp
+      if (typeof ts === 'number' && Number.isFinite(ts) && ts > latest) latest = ts
+    }
+    return latest > 0 ? latest : undefined
+  }, [props.activity])
+
   const [expandedBySlug, setExpandedBySlug] = useState<Record<string, boolean>>({})
   const [marketBySlug, setMarketBySlug] = useState<Record<string, MarketDetailState>>({})
   const marketBySlugRef = useRef<Record<string, MarketDetailState>>({})
@@ -136,7 +145,7 @@ export function ActivitiesTable(props: {
   const visibleCount = Math.min(filtered.length, visiblePages * pageSize)
 
   const canRevealMore = visibleCount < filtered.length
-  const canFetchMore = Boolean(props.paging?.hasMore) && props.activity.length < maxRows
+  const canFetchMore = Boolean(props.paging?.hasMore) && props.activity.length < maxRows && props.paging?.status !== 'error'
   const isPagingLoading = props.paging?.status === 'loading'
 
   const loadMore = useCallback(() => {
@@ -460,36 +469,23 @@ export function ActivitiesTable(props: {
             <div className="text-xs text-slate-500 dark:text-slate-400">
               已显示 {Math.min(visibleCount, filtered.length)} / {filtered.length}
             </div>
-            {canRevealMore ? (
-              <button
-                className="px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer bg-blue-600 border border-blue-600 text-white hover:bg-blue-700 hover:border-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={loadMore}
-                aria-label="显示更多账户活动流水"
-              >
-                显示更多
-              </button>
-            ) : props.paging?.status === 'error' ? (
-              <button
-                className="px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-red-600 dark:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                onClick={() => props.paging?.loadMore()}
-                aria-label="重试加载更多账户活动流水"
-              >
-                重试
-              </button>
-            ) : canFetchMore ? (
-              <button
-                className="px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer bg-blue-600 border border-blue-600 text-white hover:bg-blue-700 hover:border-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={loadMore}
-                disabled={isPagingLoading}
-                aria-label="从 Data-API 加载更多账户活动流水"
-              >
-                {isPagingLoading ? '加载中…' : '加载更多'}
-              </button>
-            ) : (
-              <div className="text-xs text-slate-500 dark:text-slate-400">
-                {props.activity.length >= maxRows ? '已达上限' : '已加载全部'}
-              </div>
-            )}
+            <div className="text-xs text-slate-500 dark:text-slate-400 font-mono whitespace-nowrap">
+              最后更新时间：
+              {lastUpdatedEpochSeconds !== undefined
+                ? new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(
+                    new Date(lastUpdatedEpochSeconds * 1000),
+                  )
+                : '—'}
+              {canRevealMore
+                ? '（滚动加载中…）'
+                : isPagingLoading || canFetchMore
+                  ? '（更新中…）'
+                  : props.paging?.status === 'error'
+                    ? '（加载失败）'
+                    : props.activity.length >= maxRows
+                      ? '（已达上限）'
+                      : '（已加载全部）'}
+            </div>
           </div>
           {props.paging?.status === 'error' && props.paging.error ? (
             <div

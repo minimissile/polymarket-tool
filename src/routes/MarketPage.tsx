@@ -166,6 +166,35 @@ export default function MarketPage() {
     return tradesInMarket.reduce((acc, t) => acc + (t.size ?? 0) * (t.price ?? 0), 0)
   }, [tradesInMarket])
 
+  const orderAmountByOutcome = useMemo(() => {
+    const map = new Map<string, { amountUsd: number; size: number; count: number }>()
+    for (const t of tradesInMarket) {
+      const size = t.size
+      const price = t.price
+      if (size === undefined || price === undefined) continue
+      if (!Number.isFinite(size) || !Number.isFinite(price)) continue
+      if (!(size > 0) || !(price > 0)) continue
+
+      const outcome =
+        t.outcome ??
+        (typeof t.outcomeIndex === 'number' && Number.isFinite(t.outcomeIndex) ? `#${t.outcomeIndex}` : '未知')
+
+      const notional = size * price
+      const prev = map.get(outcome)
+      if (prev) {
+        prev.amountUsd += notional
+        prev.size += size
+        prev.count += 1
+      } else {
+        map.set(outcome, { amountUsd: notional, size, count: 1 })
+      }
+    }
+
+    return Array.from(map.entries())
+      .map(([outcome, v]) => ({ outcome, ...v, avgPrice: v.size > 0 ? v.amountUsd / v.size : undefined }))
+      .sort((a, b) => b.amountUsd - a.amountUsd)
+  }, [tradesInMarket])
+
   const activityVolumeUsd = useMemo(() => {
     return activityInMarket.reduce((acc, a) => {
       if (a.usdcSize !== undefined) return acc + a.usdcSize
@@ -280,7 +309,7 @@ export default function MarketPage() {
         const parsePriceNumber = (value: unknown) => {
           const n = typeof value === 'number' ? value : typeof value === 'string' ? Number.parseFloat(value) : NaN
           if (!Number.isFinite(n)) return undefined
-          if (n < 0) return undefined
+          if (!(n > 0 && n < 1)) return undefined
           return n
         }
 
@@ -348,9 +377,10 @@ export default function MarketPage() {
 
     connect()
     return () => closeExisting()
-  }, [market.status, marketClobAssetIdsKey])
+  }, [market.status, marketClobAssetIds, marketClobAssetIdsKey])
 
   const marketOutcomePrices = useMemo(() => {
+    void clobPriceVersion
     if (market.status !== 'ready') return undefined
     if (!marketClobAssetIds.length) return marketOutcomePricesFromGamma
     const fallback = marketOutcomePricesFromGamma
@@ -362,7 +392,7 @@ export default function MarketPage() {
       const mark = bid !== undefined && ask !== undefined ? (bid + ask) / 2 : bid ?? ask ?? last
       return mark ?? fallback?.[idx]
     })
-  }, [market.status, marketClobAssetIdsKey, marketOutcomePricesFromGamma, clobPriceVersion])
+  }, [market.status, marketClobAssetIds, marketOutcomePricesFromGamma, clobPriceVersion])
 
   const latestPricesByAssetId = useMemo(() => {
     void clobPriceVersion
@@ -376,7 +406,8 @@ export default function MarketPage() {
 
     for (const t of tradesInMarket) {
       const live = latestPricesByAssetId[t.asset]
-      const closePrice = t.side === 'BUY' ? live?.bestBid : live?.bestAsk
+      const closePriceRaw = t.side === 'BUY' ? live?.bestBid : live?.bestAsk
+      const closePrice = closePriceRaw !== undefined && closePriceRaw > 0 && closePriceRaw < 1 ? closePriceRaw : undefined
       if (closePrice === undefined) continue
       if (t.price === undefined || t.size === undefined) continue
       if (!(t.price > 0) || !(t.size > 0)) continue
@@ -395,7 +426,7 @@ export default function MarketPage() {
   // 市场关闭时间（毫秒）
   const marketCloseTimeMs = useMemo(() => {
     if (market.status !== 'ready') return undefined
-    const raw =  market.data.endDate
+    const raw = market.data.endDateIso ?? market.data.endDate
     if (!raw) return undefined
     const ms = Date.parse(raw)
     if (Number.isNaN(ms)) return undefined
@@ -680,6 +711,60 @@ export default function MarketPage() {
                   : `${formatNumber(traderLivePnl.pnlPct * 100, { maximumFractionDigits: 2 })}%`}
               </div>
             </div>
+          </div>
+
+          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 bg-slate-50 dark:bg-slate-900/20 border-b border-slate-200 dark:border-slate-700">
+              <div className="text-sm font-semibold text-slate-900 dark:text-slate-50">按 Outcome 下单金额</div>
+            </div>
+            {orderAmountByOutcome.length ? (
+              <div className="overflow-x-auto" role="region" aria-label="按 Outcome 下单金额">
+                <table className="w-full border-collapse text-sm min-w-[760px]">
+                  <thead>
+                    <tr>
+                      <th className="text-left px-4 py-2 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                        Outcome
+                      </th>
+                      <th className="text-left px-4 py-2 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                        下单金额
+                      </th>
+                      <th className="text-left px-4 py-2 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                        总数量
+                      </th>
+                      <th className="text-left px-4 py-2 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                        平均下单价
+                      </th>
+                      <th className="text-left px-4 py-2 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                        笔数
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orderAmountByOutcome.map((row) => (
+                      <tr key={`outcomeNotional:${row.outcome}`} className="hover:bg-slate-50 dark:hover:bg-slate-700/40">
+                        <td className="px-4 py-2 border-b border-slate-200/60 dark:border-slate-700/50 text-slate-900 dark:text-slate-50">
+                          {row.outcome}
+                        </td>
+                        <td className="px-4 py-2 border-b border-slate-200/60 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 font-mono whitespace-nowrap">
+                          {formatUsd(row.amountUsd)}
+                        </td>
+                        <td className="px-4 py-2 border-b border-slate-200/60 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 font-mono whitespace-nowrap">
+                          {formatNumber(row.size, { maximumFractionDigits: 4 })}
+                        </td>
+                        <td className="px-4 py-2 border-b border-slate-200/60 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 font-mono whitespace-nowrap">
+                          {row.avgPrice !== undefined ? formatNumber(row.avgPrice, { maximumFractionDigits: 4 }) : '—'}
+                        </td>
+                        <td className="px-4 py-2 border-b border-slate-200/60 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 font-mono whitespace-nowrap">
+                          {formatNumber(row.count)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="p-6 text-sm text-slate-500 dark:text-slate-400">暂无可统计的 Outcome 下单金额</div>
+            )}
           </div>
 
           <section className="flex flex-col gap-8">

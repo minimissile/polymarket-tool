@@ -50,6 +50,15 @@ export function TradesTable(props: {
     return () => window.clearInterval(id)
   }, [features.highlightRecentTrades, features.showRelativeTime])
 
+  const lastUpdatedEpochSeconds = useMemo(() => {
+    let latest = 0
+    for (const t of props.trades) {
+      const ts = t.timestamp
+      if (typeof ts === 'number' && Number.isFinite(ts) && ts > latest) latest = ts
+    }
+    return latest > 0 ? latest : undefined
+  }, [props.trades])
+
   type MarketDetailState =
     | { status: 'idle' }
     | { status: 'loading' }
@@ -149,7 +158,7 @@ export function TradesTable(props: {
   const visibleCount = Math.min(filtered.length, visiblePages * pageSize)
 
   const canRevealMore = visibleCount < filtered.length
-  const canFetchMore = Boolean(props.paging?.hasMore) && props.trades.length < maxRows
+  const canFetchMore = Boolean(props.paging?.hasMore) && props.trades.length < maxRows && props.paging?.status !== 'error'
   const isPagingLoading = props.paging?.status === 'loading'
 
   const loadMore = useCallback(() => {
@@ -252,7 +261,9 @@ export function TradesTable(props: {
                 const outcomePrices = marketState?.status === 'ready' ? parseMaybeArray(marketState.data.outcomePrices) : undefined
 
                 const livePrice = props.latestPricesByAssetId?.[t.asset]
-                const liveClosePrice = t.side === 'BUY' ? livePrice?.bestBid : livePrice?.bestAsk
+                const liveClosePriceRaw = t.side === 'BUY' ? livePrice?.bestBid : livePrice?.bestAsk
+                const liveClosePrice =
+                  liveClosePriceRaw !== undefined && liveClosePriceRaw > 0 && liveClosePriceRaw < 1 ? liveClosePriceRaw : undefined
                 const pnlUsd =
                   showLivePnl && liveClosePrice !== undefined && t.price !== undefined && t.size !== undefined
                     ? (t.side === 'BUY' ? (liveClosePrice - t.price) * t.size : (t.price - liveClosePrice) * t.size)
@@ -499,36 +510,23 @@ export function TradesTable(props: {
             <div className="text-xs text-slate-500 dark:text-slate-400">
               已显示 {Math.min(visibleCount, filtered.length)} / {filtered.length}
             </div>
-            {canRevealMore ? (
-              <button
-                className="px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer bg-blue-600 border border-blue-600 text-white hover:bg-blue-700 hover:border-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={loadMore}
-                aria-label="显示更多最近交易"
-              >
-                显示更多
-              </button>
-            ) : props.paging?.status === 'error' ? (
-              <button
-                className="px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-red-600 dark:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                onClick={() => props.paging?.loadMore()}
-                aria-label="重试加载更多最近交易"
-              >
-                重试
-              </button>
-            ) : canFetchMore ? (
-              <button
-                className="px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer bg-blue-600 border border-blue-600 text-white hover:bg-blue-700 hover:border-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={loadMore}
-                disabled={isPagingLoading}
-                aria-label="从 Data-API 加载更多最近交易"
-              >
-                {isPagingLoading ? '加载中…' : '加载更多'}
-              </button>
-            ) : (
-              <div className="text-xs text-slate-500 dark:text-slate-400">
-                {props.trades.length >= maxRows ? '已达上限' : '已加载全部'}
-              </div>
-            )}
+            <div className="text-xs text-slate-500 dark:text-slate-400 font-mono whitespace-nowrap">
+              最后更新时间：
+              {lastUpdatedEpochSeconds !== undefined
+                ? new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(
+                    new Date(lastUpdatedEpochSeconds * 1000),
+                  )
+                : '—'}
+              {canRevealMore
+                ? '（滚动加载中…）'
+                : isPagingLoading || canFetchMore
+                  ? '（更新中…）'
+                  : props.paging?.status === 'error'
+                    ? '（加载失败）'
+                    : props.trades.length >= maxRows
+                      ? '（已达上限）'
+                      : '（已加载全部）'}
+            </div>
           </div>
           {props.paging?.status === 'error' && props.paging.error ? (
             <div
