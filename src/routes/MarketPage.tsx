@@ -392,6 +392,16 @@ export default function MarketPage() {
     return { pnlUsd, pnlPct, pricedCount }
   }, [latestPricesByAssetId, tradesInMarket])
 
+  // 市场关闭时间（毫秒）
+  const marketCloseTimeMs = useMemo(() => {
+    if (market.status !== 'ready') return undefined
+    const raw =  market.data.endDate
+    if (!raw) return undefined
+    const ms = Date.parse(raw)
+    if (Number.isNaN(ms)) return undefined
+    return ms
+  }, [market])
+
   const goBack = () => {
     if (routeUser) {
       navigate(`/trader/${routeUser}/trades`)
@@ -506,11 +516,11 @@ export default function MarketPage() {
                 </div>
                 <div className="bg-slate-50 dark:bg-slate-900/20 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
                   <div className="text-slate-500 dark:text-slate-400">开始时间</div>
-                  <div className="text-slate-900 dark:text-slate-50 font-mono mt-1">{formatMaybeIso(market.data.startDateIso ?? market.data.startDate)}</div>
+                  <div className="text-slate-900 dark:text-slate-50 font-mono mt-1">{formatMaybeIso(market.data.startDate)}</div>
                 </div>
                 <div className="bg-slate-50 dark:bg-slate-900/20 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
                   <div className="text-slate-500 dark:text-slate-400">结束时间</div>
-                  <div className="text-slate-900 dark:text-slate-50 font-mono mt-1">{formatMaybeIso(market.data.endDateIso ?? market.data.endDate)}</div>
+                  <div className="text-slate-900 dark:text-slate-50 font-mono mt-1">{formatMaybeIso(market.data.endDate)}</div>
                 </div>
                 {/*<div className="bg-slate-50 dark:bg-slate-900/20 rounded-lg border border-slate-200 dark:border-slate-700 p-3">*/}
                 {/*  <div className="text-slate-500 dark:text-slate-400">条件</div>*/}
@@ -677,6 +687,7 @@ export default function MarketPage() {
               trades={tradesInMarket}
               status={trader.status}
               latestPricesByAssetId={latestPricesByAssetId}
+              marketCloseTimeMs={marketCloseTimeMs}
               paging={{
                 status: trader.tradesPaging.status,
                 error: trader.tradesPaging.error,

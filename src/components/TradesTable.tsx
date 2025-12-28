@@ -9,6 +9,7 @@ export function TradesTable(props: {
   onOpenMarket?: (slug: string) => void
   maxRows?: number
   latestPricesByAssetId?: Record<string, { bestBid?: number; bestAsk?: number; lastTrade?: number }>
+  marketCloseTimeMs?: number
   paging?: {
     status: 'idle' | 'loading' | 'error'
     error?: string
@@ -65,7 +66,13 @@ export function TradesTable(props: {
   }, [marketBySlug])
 
   const showLivePnl = Boolean(props.latestPricesByAssetId)
-  const colCount = 6 + (features.showOrderAmount ? 1 : 0) + (showLivePnl ? 2 : 0) + (features.enableMarketDetails ? 1 : 0)
+  const showCloseCountdown = typeof props.marketCloseTimeMs === 'number' && Number.isFinite(props.marketCloseTimeMs)
+  const colCount =
+    6 +
+    (features.showOrderAmount ? 1 : 0) +
+    (showCloseCountdown ? 1 : 0) +
+    (showLivePnl ? 2 : 0) +
+    (features.enableMarketDetails ? 1 : 0)
 
   const fetchMarket = async (slug: string) => {
     const key = slug.toLowerCase()
@@ -191,7 +198,7 @@ export function TradesTable(props: {
         </div>
       ) : (
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-x-auto shadow-sm" role="region" aria-label="最近交易表格">
-          <table className="w-full border-collapse text-sm min-w-[1120px]">
+          <table className="w-full border-collapse text-sm min-w-[1240px]">
             <thead>
               <tr>
                 <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">时间</th>
@@ -202,6 +209,11 @@ export function TradesTable(props: {
                 <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">数量</th>
                 {features.showOrderAmount ? (
                   <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">下单金额</th>
+                ) : null}
+                {showCloseCountdown ? (
+                  <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">
+                    距收盘
+                  </th>
                 ) : null}
                 {showLivePnl ? (
                   <>
@@ -257,6 +269,18 @@ export function TradesTable(props: {
                         ? 'text-red-600 dark:text-red-400'
                         : 'text-slate-600 dark:text-slate-300'
                     : 'text-slate-500 dark:text-slate-400'
+
+                const closeText = (() => {
+                  if (!showCloseCountdown) return undefined
+                  const closeMs = props.marketCloseTimeMs as number
+                  const remainingMs = closeMs - nowMs
+                  if (!(remainingMs > 0)) return '已收盘'
+                  const totalSeconds = Math.floor(remainingMs / 1000)
+                  const minutes = Math.floor(totalSeconds / 60)
+                  const seconds = totalSeconds % 60
+                  const secText = String(seconds).padStart(2, '0')
+                  return `${minutes}分${secText}秒`
+                })()
 
                 return (
                   <Fragment key={rowKey}>
@@ -318,6 +342,11 @@ export function TradesTable(props: {
                       {features.showOrderAmount ? (
                         <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 align-middle font-mono whitespace-nowrap">
                           {formatUsd(orderAmountUsd)}
+                        </td>
+                      ) : null}
+                      {showCloseCountdown ? (
+                        <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 align-middle font-mono whitespace-nowrap">
+                          {closeText ?? '—'}
                         </td>
                       ) : null}
                       {showLivePnl ? (
