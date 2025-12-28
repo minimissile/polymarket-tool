@@ -70,9 +70,10 @@ export default function MarketPage() {
   const marketAbortRef = useRef<AbortController | null>(null)
   const marketInFlightRef = useRef(false)
 
-  useEffect(() => {
-    marketRef.current = market
-  }, [market])
+  const commitMarket = (next: MarketState) => {
+    marketRef.current = next
+    setMarket(next)
+  }
 
   const fetchMarket = useCallback(
     async (options?: { silent?: boolean; preferFresh?: boolean }) => {
@@ -87,13 +88,13 @@ export default function MarketPage() {
       marketAbortRef.current = controller
       marketInFlightRef.current = true
 
-      if (!silent || marketRef.current.status !== 'ready') setMarket({ status: 'loading' })
+      if (!silent) commitMarket({ status: 'loading' })
       try {
         const data = await getGammaMarketBySlug(slugKey, { signal: controller.signal, timeoutMs: 12_000 })
-        setMarket({ status: 'ready', data })
+        commitMarket({ status: 'ready', data })
       } catch (e) {
         const message = e instanceof Error ? e.message : '请求失败'
-        setMarket({ status: 'error', error: message })
+        commitMarket({ status: 'error', error: message })
       } finally {
         marketInFlightRef.current = false
       }
