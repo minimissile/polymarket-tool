@@ -18,10 +18,14 @@ function App() {
             <Route index element={<Navigate to="/analyze" replace />} />
             <Route path="/analyze" element={<AnalyzePage />} />
             <Route path="/trader/:user/:tab?" element={<AnalyzePage />} />
-            <Route path="/trader/:user/market/:slug" element={<MarketPage />} />
+
             <Route path="/watchlist" element={<WatchlistPage />} />
             <Route path="/discover" element={<DiscoverPage />} />
             <Route path="*" element={<Navigate to="/analyze" replace />} />
+          </Route>
+
+          <Route>
+            <Route path="/trader/:user/market/:slug" element={<MarketPage />} />
           </Route>
         </Routes>
       </Suspense>
