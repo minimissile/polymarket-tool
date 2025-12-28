@@ -8,6 +8,7 @@ export function TradesTable(props: {
   status?: 'idle' | 'loading' | 'ready' | 'error'
   onOpenMarket?: (slug: string) => void
   maxRows?: number
+  latestPricesByAssetId?: Record<string, { bestBid?: number; bestAsk?: number; lastTrade?: number }>
   paging?: {
     status: 'idle' | 'loading' | 'error'
     error?: string
@@ -63,7 +64,8 @@ export function TradesTable(props: {
     marketBySlugRef.current = marketBySlug
   }, [marketBySlug])
 
-  const colCount = 6 + (features.showOrderAmount ? 1 : 0) + (features.enableMarketDetails ? 1 : 0)
+  const showLivePnl = Boolean(props.latestPricesByAssetId)
+  const colCount = 6 + (features.showOrderAmount ? 1 : 0) + (showLivePnl ? 2 : 0) + (features.enableMarketDetails ? 1 : 0)
 
   const fetchMarket = async (slug: string) => {
     const key = slug.toLowerCase()
@@ -189,7 +191,7 @@ export function TradesTable(props: {
         </div>
       ) : (
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-x-auto shadow-sm" role="region" aria-label="最近交易表格">
-          <table className="w-full border-collapse text-sm min-w-[980px]">
+          <table className="w-full border-collapse text-sm min-w-[1120px]">
             <thead>
               <tr>
                 <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">时间</th>
@@ -200,6 +202,16 @@ export function TradesTable(props: {
                 <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">数量</th>
                 {features.showOrderAmount ? (
                   <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">下单金额</th>
+                ) : null}
+                {showLivePnl ? (
+                  <>
+                    <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">
+                      收益
+                    </th>
+                    <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">
+                      收益率
+                    </th>
+                  </>
                 ) : null}
                 {features.enableMarketDetails ? (
                   <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">操作</th>
@@ -226,6 +238,25 @@ export function TradesTable(props: {
 
                 const outcomes = marketState?.status === 'ready' ? parseMaybeArray(marketState.data.outcomes) : undefined
                 const outcomePrices = marketState?.status === 'ready' ? parseMaybeArray(marketState.data.outcomePrices) : undefined
+
+                const livePrice = props.latestPricesByAssetId?.[t.asset]
+                const liveClosePrice = t.side === 'BUY' ? livePrice?.bestBid : livePrice?.bestAsk
+                const pnlUsd =
+                  showLivePnl && liveClosePrice !== undefined && t.price !== undefined && t.size !== undefined
+                    ? (t.side === 'BUY' ? (liveClosePrice - t.price) * t.size : (t.price - liveClosePrice) * t.size)
+                    : undefined
+                const pnlPct =
+                  pnlUsd !== undefined && t.price !== undefined && t.size !== undefined && t.price > 0 && t.size > 0
+                    ? pnlUsd / (t.price * t.size)
+                    : undefined
+                const pnlColor =
+                  pnlUsd !== undefined
+                    ? pnlUsd > 0
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : pnlUsd < 0
+                        ? 'text-red-600 dark:text-red-400'
+                        : 'text-slate-600 dark:text-slate-300'
+                    : 'text-slate-500 dark:text-slate-400'
 
                 return (
                   <Fragment key={rowKey}>
@@ -288,6 +319,16 @@ export function TradesTable(props: {
                         <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 align-middle font-mono whitespace-nowrap">
                           {formatUsd(orderAmountUsd)}
                         </td>
+                      ) : null}
+                      {showLivePnl ? (
+                        <>
+                          <td className={`px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 align-middle font-mono whitespace-nowrap ${pnlColor}`}>
+                            {pnlUsd !== undefined ? formatUsd(pnlUsd) : '—'}
+                          </td>
+                          <td className={`px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 align-middle font-mono whitespace-nowrap ${pnlColor}`}>
+                            {pnlPct !== undefined ? `${formatNumber(pnlPct * 100, { maximumFractionDigits: 2 })}%` : '—'}
+                          </td>
+                        </>
                       ) : null}
                       {features.enableMarketDetails ? (
                         <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 align-middle whitespace-nowrap">

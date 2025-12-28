@@ -69,6 +69,14 @@ export default function MarketPage() {
   const marketRef = useRef<MarketState>(market)
   const marketAbortRef = useRef<AbortController | null>(null)
   const marketInFlightRef = useRef(false)
+  const clobWsRef = useRef<WebSocket | null>(null)
+  const clobWsPingIdRef = useRef<number | null>(null)
+  const clobWsReconnectIdRef = useRef<number | null>(null)
+  const clobWsReconnectAttemptRef = useRef(0)
+  const clobWsShouldReconnectRef = useRef(true)
+  const clobPriceByAssetIdRef = useRef<Record<string, { bestBid?: number; bestAsk?: number; lastTrade?: number }>>({})
+  const clobPriceFlushIdRef = useRef<number | null>(null)
+  const [clobPriceVersion, setClobPriceVersion] = useState(0)
 
   const commitMarket = (next: MarketState) => {
     marketRef.current = next
@@ -142,10 +150,195 @@ export default function MarketPage() {
     return parseMaybeArray(market.data.outcomes)
   }, [market])
 
-  const marketOutcomePrices = useMemo(() => {
+  const marketOutcomePricesFromGamma = useMemo(() => {
     if (market.status !== 'ready') return undefined
     return parseMaybeArray(market.data.outcomePrices)
   }, [market])
+
+  const marketClobAssetIds = useMemo(() => {
+    if (market.status !== 'ready') return []
+    const marketRecord = market.data as unknown as Record<string, unknown>
+    const tokenIdsRaw = marketRecord.clobTokenIds ?? marketRecord.tokenIds ?? marketRecord.clobTokenId
+    const tokenIds = parseMaybeArray(tokenIdsRaw)
+    return (tokenIds ?? [])
+      .map((v) => (typeof v === 'string' ? v : typeof v === 'number' && Number.isFinite(v) ? String(v) : ''))
+      .filter(Boolean)
+  }, [market])
+
+  const marketClobAssetIdsKey = useMemo(() => marketClobAssetIds.join('|'), [marketClobAssetIds])
+
+  const scheduleClobPriceFlush = () => {
+    if (clobPriceFlushIdRef.current !== null) return
+    clobPriceFlushIdRef.current = window.setTimeout(() => {
+      clobPriceFlushIdRef.current = null
+      setClobPriceVersion((v) => v + 1)
+    }, 200)
+  }
+
+  useEffect(() => {
+    if (market.status !== 'ready') return
+    if (!marketClobAssetIds.length) return
+
+    const closeExisting = () => {
+      clobWsShouldReconnectRef.current = false
+      if (clobWsReconnectIdRef.current !== null) {
+        window.clearTimeout(clobWsReconnectIdRef.current)
+        clobWsReconnectIdRef.current = null
+      }
+      if (clobWsPingIdRef.current !== null) {
+        window.clearInterval(clobWsPingIdRef.current)
+        clobWsPingIdRef.current = null
+      }
+      if (clobPriceFlushIdRef.current !== null) {
+        window.clearTimeout(clobPriceFlushIdRef.current)
+        clobPriceFlushIdRef.current = null
+      }
+      const existing = clobWsRef.current
+      clobWsRef.current = null
+      if (existing && (existing.readyState === WebSocket.OPEN || existing.readyState === WebSocket.CONNECTING)) {
+        existing.close()
+      }
+    }
+
+    const connect = () => {
+      closeExisting()
+      clobWsShouldReconnectRef.current = true
+      clobPriceByAssetIdRef.current = {}
+      setClobPriceVersion((v) => v + 1)
+      const ws = new WebSocket('wss://ws-subscriptions-clob.polymarket.com/ws/market')
+      clobWsRef.current = ws
+
+      ws.onopen = () => {
+        clobWsReconnectAttemptRef.current = 0
+        ws.send(
+          JSON.stringify({
+            type: 'market',
+            assets_ids: marketClobAssetIds,
+            custom_feature_enabled: true,
+          }),
+        )
+        clobWsPingIdRef.current = window.setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) ws.send('PING')
+        }, 10_000)
+      }
+
+      ws.onmessage = (evt) => {
+        const raw = typeof evt.data === 'string' ? evt.data : ''
+        if (!raw) return
+        if (raw === 'PONG') return
+        if (raw === 'PING') {
+          if (ws.readyState === WebSocket.OPEN) ws.send('PONG')
+          return
+        }
+
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(raw) as unknown
+        } catch {
+          return
+        }
+        if (!parsed || typeof parsed !== 'object') return
+
+        const msg = parsed as Record<string, unknown>
+        const eventType = msg.event_type
+
+        const upsert = (assetId: string, next: { bestBid?: number; bestAsk?: number; lastTrade?: number }) => {
+          const prev = clobPriceByAssetIdRef.current[assetId] ?? {}
+          clobPriceByAssetIdRef.current[assetId] = { ...prev, ...next }
+          scheduleClobPriceFlush()
+        }
+
+        const parsePriceNumber = (value: unknown) => {
+          const n = typeof value === 'number' ? value : typeof value === 'string' ? Number.parseFloat(value) : NaN
+          if (!Number.isFinite(n)) return undefined
+          if (n < 0) return undefined
+          return n
+        }
+
+        if (eventType === 'book') {
+          const assetId = typeof msg.asset_id === 'string' ? msg.asset_id : undefined
+          if (!assetId) return
+          const bids = (msg.bids ?? msg.buys) as unknown
+          const asks = (msg.asks ?? msg.sells) as unknown
+          const bidsArr = Array.isArray(bids) ? bids : []
+          const asksArr = Array.isArray(asks) ? asks : []
+          const bid0 = bidsArr[0]
+          const ask0 = asksArr[0]
+          const bestBid =
+            bid0 && typeof bid0 === 'object' ? parsePriceNumber((bid0 as Record<string, unknown>).price) : undefined
+          const bestAsk =
+            ask0 && typeof ask0 === 'object' ? parsePriceNumber((ask0 as Record<string, unknown>).price) : undefined
+          upsert(assetId, { bestBid, bestAsk })
+          return
+        }
+
+        if (eventType === 'best_bid_ask') {
+          const assetId = typeof msg.asset_id === 'string' ? msg.asset_id : undefined
+          if (!assetId) return
+          const bestBid = parsePriceNumber(msg.best_bid)
+          const bestAsk = parsePriceNumber(msg.best_ask)
+          upsert(assetId, { bestBid, bestAsk })
+          return
+        }
+
+        if (eventType === 'last_trade_price') {
+          const assetId = typeof msg.asset_id === 'string' ? msg.asset_id : undefined
+          if (!assetId) return
+          const lastTrade = parsePriceNumber(msg.price)
+          upsert(assetId, { lastTrade })
+          return
+        }
+
+        if (eventType === 'price_change') {
+          const changes = msg.price_changes
+          if (!Array.isArray(changes)) return
+          for (const ch of changes) {
+            if (!ch || typeof ch !== 'object') continue
+            const r = ch as Record<string, unknown>
+            const assetId = typeof r.asset_id === 'string' ? r.asset_id : undefined
+            if (!assetId) continue
+            const bestBid = parsePriceNumber(r.best_bid)
+            const bestAsk = parsePriceNumber(r.best_ask)
+            upsert(assetId, { bestBid, bestAsk })
+          }
+        }
+      }
+
+      ws.onclose = () => {
+        if (clobWsPingIdRef.current !== null) {
+          window.clearInterval(clobWsPingIdRef.current)
+          clobWsPingIdRef.current = null
+        }
+        if (!clobWsShouldReconnectRef.current) return
+        const attempt = clobWsReconnectAttemptRef.current + 1
+        clobWsReconnectAttemptRef.current = attempt
+        const delayMs = Math.min(30_000, 800 * 2 ** Math.min(6, attempt))
+        clobWsReconnectIdRef.current = window.setTimeout(() => connect(), delayMs)
+      }
+    }
+
+    connect()
+    return () => closeExisting()
+  }, [market.status, marketClobAssetIdsKey])
+
+  const marketOutcomePrices = useMemo(() => {
+    if (market.status !== 'ready') return undefined
+    if (!marketClobAssetIds.length) return marketOutcomePricesFromGamma
+    const fallback = marketOutcomePricesFromGamma
+    return marketClobAssetIds.map((assetId, idx) => {
+      const info = clobPriceByAssetIdRef.current[assetId]
+      const bid = info?.bestBid
+      const ask = info?.bestAsk
+      const last = info?.lastTrade
+      const mark = bid !== undefined && ask !== undefined ? (bid + ask) / 2 : bid ?? ask ?? last
+      return mark ?? fallback?.[idx]
+    })
+  }, [market.status, marketClobAssetIdsKey, marketOutcomePricesFromGamma, clobPriceVersion])
+
+  const latestPricesByAssetId = useMemo(() => {
+    void clobPriceVersion
+    return clobPriceByAssetIdRef.current
+  }, [clobPriceVersion])
 
   const goBack = () => {
     if (routeUser) {
@@ -366,6 +559,7 @@ export default function MarketPage() {
             <TradesTable
               trades={tradesInMarket}
               status={trader.status}
+              latestPricesByAssetId={latestPricesByAssetId}
               paging={{
                 status: trader.tradesPaging.status,
                 error: trader.tradesPaging.error,
