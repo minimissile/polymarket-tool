@@ -1,11 +1,19 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getGammaMarketBySlug, type DataApiTrade, type GammaMarket } from '../lib/polymarketDataApi'
 import { formatDateTime, formatNumber, formatRelativeTime, formatUsd } from '../lib/format'
 
 /** 最近交易表格：按时间倒序展示，并支持关键词筛选。 */
 export function TradesTable(props: {
   trades: DataApiTrade[]
+  status?: 'idle' | 'loading' | 'ready' | 'error'
+  onOpenMarket?: (slug: string) => void
   maxRows?: number
+  paging?: {
+    status: 'idle' | 'loading' | 'error'
+    error?: string
+    hasMore: boolean
+    loadMore: () => void
+  }
   features?: Partial<{
     showOrderAmount: boolean
     showIcon: boolean
@@ -16,7 +24,10 @@ export function TradesTable(props: {
   }>
 }) {
   const [query, setQuery] = useState('')
-  const maxRows = props.maxRows ?? 100
+  const maxRows = props.maxRows ?? 5000
+  const pageSize = Math.min(50, maxRows)
+  const [visiblePages, setVisiblePages] = useState(1)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
 
   const features = useMemo(() => {
     return {
@@ -74,6 +85,11 @@ export function TradesTable(props: {
   }
 
   const toggleDetails = (slug: string) => {
+    if (props.onOpenMarket) {
+      const key = slug.toLowerCase()
+      props.onOpenMarket(key)
+      return
+    }
     const key = slug.toLowerCase()
     setExpandedBySlug((prev) => {
       const next = !prev[key]
@@ -111,21 +127,46 @@ export function TradesTable(props: {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     const list = props.trades.slice().sort((a, b) => b.timestamp - a.timestamp)
-    if (!q) return list.slice(0, maxRows)
-    return list
-      .filter((t) => {
-        const title = (t.title ?? '').toLowerCase()
-        const slug = (t.slug ?? '').toLowerCase()
-        const outcome = (t.outcome ?? '').toLowerCase()
-        return (
-          title.includes(q) ||
-          slug.includes(q) ||
-          outcome.includes(q) ||
-          t.conditionId.toLowerCase().includes(q)
-        )
-      })
-      .slice(0, maxRows)
+    const matched = q
+      ? list.filter((t) => {
+          const title = (t.title ?? '').toLowerCase()
+          const slug = (t.slug ?? '').toLowerCase()
+          const outcome = (t.outcome ?? '').toLowerCase()
+          return title.includes(q) || slug.includes(q) || outcome.includes(q) || t.conditionId.toLowerCase().includes(q)
+        })
+      : list
+    return matched.slice(0, maxRows)
   }, [maxRows, props.trades, query])
+  const visibleCount = Math.min(filtered.length, visiblePages * pageSize)
+
+  const canRevealMore = visibleCount < filtered.length
+  const canFetchMore = Boolean(props.paging?.hasMore) && props.trades.length < maxRows
+  const isPagingLoading = props.paging?.status === 'loading'
+
+  const loadMore = useCallback(() => {
+    if (canRevealMore) {
+      setVisiblePages((prev) => prev + 1)
+      return
+    }
+    if (canFetchMore && !isPagingLoading) props.paging?.loadMore()
+  }, [canFetchMore, canRevealMore, isPagingLoading, props.paging])
+
+  useEffect(() => {
+    if (!canRevealMore && !canFetchMore) return
+    const el = sentinelRef.current
+    if (!el) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) loadMore()
+      },
+      { root: null, rootMargin: '240px 0px', threshold: 0 },
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [canFetchMore, canRevealMore, loadMore])
+
+  const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount])
 
   return (
     <div className="flex flex-col gap-2">
@@ -134,34 +175,39 @@ export function TradesTable(props: {
         <input
           className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-50 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 focus:border-blue-500 transition-all mb-4"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            setVisiblePages(1)
+          }}
           placeholder="筛选：标题 / 市场 / outcome / conditionId"
           aria-label="筛选最近交易"
         />
       </div>
       {filtered.length === 0 ? (
-        <div className="p-8 text-center text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">暂无交易</div>
+        <div className="p-8 text-center text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
+          {props.status === 'loading' ? '加载中…' : '暂无交易'}
+        </div>
       ) : (
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-x-auto shadow-sm" role="region" aria-label="最近交易表格">
           <table className="w-full border-collapse text-sm min-w-[980px]">
             <thead>
               <tr>
-                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">时间</th>
-                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">交易类型</th>
-                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">市场</th>
-                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">Outcome</th>
-                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">价格</th>
-                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">数量</th>
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">时间</th>
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">交易类型</th>
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">市场</th>
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">Outcome</th>
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">价格</th>
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">数量</th>
                 {features.showOrderAmount ? (
-                  <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">下单金额</th>
+                  <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">下单金额</th>
                 ) : null}
                 {features.enableMarketDetails ? (
-                  <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">操作</th>
+                  <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">操作</th>
                 ) : null}
               </tr>
             </thead>
             <tbody>
-              {filtered.map((t) => {
+              {visible.map((t) => {
                 const rowKey = tradeRowKey(t)
                 const slug = (t.slug ?? '').trim()
                 const slugKey = slug.toLowerCase()
@@ -249,11 +295,11 @@ export function TradesTable(props: {
                             className="px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
                             onClick={() => toggleDetails(slug)}
                             disabled={!slug}
-                            aria-label={slug ? `查看 ${slug} 市场详情` : '缺少 slug，无法查看详情'}
-                            aria-expanded={expanded}
-                            aria-controls={slug ? `tradeDetails:${slugKey}` : undefined}
+                            aria-label={slug ? '打开 market 分析页' : '缺少 slug，无法打开'}
+                            aria-expanded={props.onOpenMarket ? undefined : expanded}
+                            aria-controls={props.onOpenMarket ? undefined : slug ? `tradeDetails:${slugKey}` : undefined}
                           >
-                            {expanded ? '收起' : '详情'}
+                            {props.onOpenMarket ? '详情' : expanded ? '收起' : '详情'}
                           </button>
                         </td>
                       ) : null}
@@ -379,6 +425,51 @@ export function TradesTable(props: {
               })}
             </tbody>
           </table>
+          <div className="flex items-center justify-between gap-3 px-4 py-3 bg-slate-50/60 dark:bg-slate-900/10 border-t border-slate-200 dark:border-slate-700">
+            <div className="text-xs text-slate-500 dark:text-slate-400">
+              已显示 {Math.min(visibleCount, filtered.length)} / {filtered.length}
+            </div>
+            {canRevealMore ? (
+              <button
+                className="px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer bg-blue-600 border border-blue-600 text-white hover:bg-blue-700 hover:border-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={loadMore}
+                aria-label="显示更多最近交易"
+              >
+                显示更多
+              </button>
+            ) : props.paging?.status === 'error' ? (
+              <button
+                className="px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-red-600 dark:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                onClick={() => props.paging?.loadMore()}
+                aria-label="重试加载更多最近交易"
+              >
+                重试
+              </button>
+            ) : canFetchMore ? (
+              <button
+                className="px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer bg-blue-600 border border-blue-600 text-white hover:bg-blue-700 hover:border-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={loadMore}
+                disabled={isPagingLoading}
+                aria-label="从 Data-API 加载更多最近交易"
+              >
+                {isPagingLoading ? '加载中…' : '加载更多'}
+              </button>
+            ) : (
+              <div className="text-xs text-slate-500 dark:text-slate-400">
+                {props.trades.length >= maxRows ? '已达上限' : '已加载全部'}
+              </div>
+            )}
+          </div>
+          {props.paging?.status === 'error' && props.paging.error ? (
+            <div
+              className="px-4 py-3 text-xs text-red-500 bg-slate-50/60 dark:bg-slate-900/10 border-t border-slate-200 dark:border-slate-700"
+              role="status"
+              aria-live="polite"
+            >
+              加载更多失败：{props.paging.error}
+            </div>
+          ) : null}
+          <div ref={sentinelRef} aria-hidden className="h-1" />
         </div>
       )}
     </div>

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getGammaMarketBySlug, type DataApiActivity, type GammaMarket } from '../lib/polymarketDataApi'
 import { formatDateTime, formatNumber, formatRelativeTime, formatUsd } from '../lib/format'
 
@@ -15,9 +15,24 @@ type MarketDetailState =
   | { status: 'ready'; data: GammaMarket }
   | { status: 'error'; error: string }
 
-export function ActivitiesTable(props: { activity: DataApiActivity[]; maxRows?: number; features?: ActivityFeatures }) {
+export function ActivitiesTable(props: {
+  activity: DataApiActivity[]
+  status?: 'idle' | 'loading' | 'ready' | 'error'
+  onOpenMarket?: (slug: string) => void
+  maxRows?: number
+  paging?: {
+    status: 'idle' | 'loading' | 'error'
+    error?: string
+    hasMore: boolean
+    loadMore: () => void
+  }
+  features?: ActivityFeatures
+}) {
   const [query, setQuery] = useState('')
-  const maxRows = props.maxRows ?? 100
+  const maxRows = props.maxRows ?? 5000
+  const pageSize = Math.min(50, maxRows)
+  const [visiblePages, setVisiblePages] = useState(1)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
 
   const features = useMemo(() => {
     return {
@@ -93,6 +108,11 @@ export function ActivitiesTable(props: { activity: DataApiActivity[]; maxRows?: 
   }
 
   const toggleDetails = (slug: string) => {
+    if (props.onOpenMarket) {
+      const key = slug.toLowerCase()
+      props.onOpenMarket(key)
+      return
+    }
     const key = slug.toLowerCase()
     setExpandedBySlug((prev) => ({ ...prev, [key]: !prev[key] }))
     void fetchMarket(key)
@@ -101,19 +121,48 @@ export function ActivitiesTable(props: { activity: DataApiActivity[]; maxRows?: 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     const list = props.activity.slice().sort((a, b) => b.timestamp - a.timestamp)
-    if (!q) return list.slice(0, maxRows)
-
-    return list
-      .filter((a) => {
-        const title = (a.title ?? '').toLowerCase()
-        const slug = (a.slug ?? '').toLowerCase()
-        const outcome = (a.outcome ?? '').toLowerCase()
-        const type = (a.type ?? '').toLowerCase()
-        const conditionId = (a.conditionId ?? '').toLowerCase()
-        return title.includes(q) || slug.includes(q) || outcome.includes(q) || type.includes(q) || conditionId.includes(q)
-      })
-      .slice(0, maxRows)
+    const matched = q
+      ? list.filter((a) => {
+          const title = (a.title ?? '').toLowerCase()
+          const slug = (a.slug ?? '').toLowerCase()
+          const outcome = (a.outcome ?? '').toLowerCase()
+          const type = (a.type ?? '').toLowerCase()
+          const conditionId = (a.conditionId ?? '').toLowerCase()
+          return title.includes(q) || slug.includes(q) || outcome.includes(q) || type.includes(q) || conditionId.includes(q)
+        })
+      : list
+    return matched.slice(0, maxRows)
   }, [maxRows, props.activity, query])
+  const visibleCount = Math.min(filtered.length, visiblePages * pageSize)
+
+  const canRevealMore = visibleCount < filtered.length
+  const canFetchMore = Boolean(props.paging?.hasMore) && props.activity.length < maxRows
+  const isPagingLoading = props.paging?.status === 'loading'
+
+  const loadMore = useCallback(() => {
+    if (canRevealMore) {
+      setVisiblePages((prev) => prev + 1)
+      return
+    }
+    if (canFetchMore && !isPagingLoading) props.paging?.loadMore()
+  }, [canFetchMore, canRevealMore, isPagingLoading, props.paging])
+
+  useEffect(() => {
+    if (!canRevealMore && !canFetchMore) return
+    const el = sentinelRef.current
+    if (!el) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) loadMore()
+      },
+      { root: null, rootMargin: '240px 0px', threshold: 0 },
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [canFetchMore, canRevealMore, loadMore])
+
+  const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount])
 
   return (
     <div className="flex flex-col gap-2">
@@ -122,7 +171,10 @@ export function ActivitiesTable(props: { activity: DataApiActivity[]; maxRows?: 
         <input
           className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-50 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 focus:border-blue-500 transition-all mb-4"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            setVisiblePages(1)
+          }}
           placeholder="筛选：标题 / 市场 / type / conditionId"
           aria-label="筛选账户活动流水"
         />
@@ -130,46 +182,47 @@ export function ActivitiesTable(props: { activity: DataApiActivity[]; maxRows?: 
 
       {filtered.length === 0 ? (
         <div className="p-8 text-center text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
-          暂无活动
+          {props.status === 'loading' ? '加载中…' : '暂无活动'}
         </div>
       ) : (
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-x-auto shadow-sm" role="region" aria-label="账户活动流水表格">
           <table className="w-full border-collapse text-sm min-w-[1100px]">
             <thead>
               <tr>
-                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">
                   时间
                 </th>
-                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">
                   类型
                 </th>
-                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">
                   方向
                 </th>
-                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">
                   市场
                 </th>
-                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">
                   Outcome
                 </th>
-                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
-                  USDC
-                </th>
-                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
+
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">
                   价格
                 </th>
-                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">
                   数量
                 </th>
+                <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">
+                  金额
+                </th>
                 {features.enableMarketDetails ? (
-                  <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                  <th className="text-left px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap sticky top-0 z-20 first:rounded-tl-xl last:rounded-tr-xl">
                     操作
                   </th>
                 ) : null}
               </tr>
             </thead>
             <tbody>
-              {filtered.map((a) => {
+              {visible.map((a) => {
                 const rowKey = activityRowKey(a)
                 const slug = (a.slug ?? '').trim()
                 const slugKey = slug.toLowerCase()
@@ -260,9 +313,7 @@ export function ActivitiesTable(props: { activity: DataApiActivity[]; maxRows?: 
                         {a.outcome ?? '—'}
                       </td>
 
-                      <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 align-middle font-mono whitespace-nowrap">
-                        {usdc === undefined ? '—' : formatUsd(usdc)}
-                      </td>
+
 
                       <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 align-middle font-mono whitespace-nowrap">
                         {a.price === undefined ? '—' : formatNumber(a.price, { maximumFractionDigits: 4 })}
@@ -272,17 +323,21 @@ export function ActivitiesTable(props: { activity: DataApiActivity[]; maxRows?: 
                         {a.size === undefined ? '—' : formatNumber(a.size, { maximumFractionDigits: 2 })}
                       </td>
 
+                      <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 align-middle font-mono whitespace-nowrap">
+                        {usdc === undefined ? '—' : formatUsd(usdc)}
+                      </td>
+
                       {features.enableMarketDetails ? (
                         <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 align-middle whitespace-nowrap">
                           <button
                             className="px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
                             onClick={() => toggleDetails(slug)}
                             disabled={!slug}
-                            aria-label={slug ? `查看 ${slug} 市场详情` : '缺少 slug，无法查看详情'}
-                            aria-expanded={expanded}
-                            aria-controls={slug ? `activityDetails:${slugKey}` : undefined}
+                            aria-label={slug ? '打开 market 分析页' : '缺少 slug，无法打开'}
+                            aria-expanded={props.onOpenMarket ? undefined : expanded}
+                            aria-controls={props.onOpenMarket ? undefined : slug ? `activityDetails:${slugKey}` : undefined}
                           >
-                            {expanded ? '收起' : '详情'}
+                            {props.onOpenMarket ? '详情' : expanded ? '收起' : '详情'}
                           </button>
                         </td>
                       ) : null}
@@ -401,9 +456,53 @@ export function ActivitiesTable(props: { activity: DataApiActivity[]; maxRows?: 
               })}
             </tbody>
           </table>
+          <div className="flex items-center justify-between gap-3 px-4 py-3 bg-slate-50/60 dark:bg-slate-900/10 border-t border-slate-200 dark:border-slate-700">
+            <div className="text-xs text-slate-500 dark:text-slate-400">
+              已显示 {Math.min(visibleCount, filtered.length)} / {filtered.length}
+            </div>
+            {canRevealMore ? (
+              <button
+                className="px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer bg-blue-600 border border-blue-600 text-white hover:bg-blue-700 hover:border-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={loadMore}
+                aria-label="显示更多账户活动流水"
+              >
+                显示更多
+              </button>
+            ) : props.paging?.status === 'error' ? (
+              <button
+                className="px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-red-600 dark:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                onClick={() => props.paging?.loadMore()}
+                aria-label="重试加载更多账户活动流水"
+              >
+                重试
+              </button>
+            ) : canFetchMore ? (
+              <button
+                className="px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer bg-blue-600 border border-blue-600 text-white hover:bg-blue-700 hover:border-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={loadMore}
+                disabled={isPagingLoading}
+                aria-label="从 Data-API 加载更多账户活动流水"
+              >
+                {isPagingLoading ? '加载中…' : '加载更多'}
+              </button>
+            ) : (
+              <div className="text-xs text-slate-500 dark:text-slate-400">
+                {props.activity.length >= maxRows ? '已达上限' : '已加载全部'}
+              </div>
+            )}
+          </div>
+          {props.paging?.status === 'error' && props.paging.error ? (
+            <div
+              className="px-4 py-3 text-xs text-red-500 bg-slate-50/60 dark:bg-slate-900/10 border-t border-slate-200 dark:border-slate-700"
+              role="status"
+              aria-live="polite"
+            >
+              加载更多失败：{props.paging.error}
+            </div>
+          ) : null}
+          <div ref={sentinelRef} aria-hidden className="h-1" />
         </div>
       )}
     </div>
   )
 }
-

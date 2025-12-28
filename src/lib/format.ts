@@ -15,6 +15,9 @@ export function formatPercent(value: number) {
 export function formatUsd(value: number) {
   const absValue = Math.abs(value)
   const maximumFractionDigits = absValue < 1 ? 4 : absValue < 100 ? 2 : 0
+
+
+
   return new Intl.NumberFormat(undefined, {
     style: 'currency',
     currency: 'USD',

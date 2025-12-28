@@ -144,6 +144,12 @@ export default function AnalyzePage() {
     navigate(`/trader/${user}/${next}`, { replace: true })
   }
 
+  const openMarket = (slug: string) => {
+    const user = routeUser
+    if (!user) return
+    navigate(`/trader/${user}/market/${encodeURIComponent(slug)}`)
+  }
+
   return (
     <main className="flex flex-col gap-8 w-full">
       <div className="w-full">
@@ -336,13 +342,33 @@ export default function AnalyzePage() {
 
           {activeTab === 'trades' ? (
             <section role="tabpanel" id="tabPanelTrades" aria-labelledby="tabTrades" className="flex flex-col gap-8">
-              <TradesTable trades={selected.data.trades} />
+              <TradesTable
+                trades={selected.data.trades}
+                status={selected.status}
+                onOpenMarket={openMarket}
+                paging={{
+                  status: selected.tradesPaging.status,
+                  error: selected.tradesPaging.error,
+                  hasMore: selected.tradesPaging.hasMore,
+                  loadMore: selected.loadMoreTrades,
+                }}
+              />
             </section>
           ) : null}
 
           {activeTab === 'activity' ? (
             <section role="tabpanel" id="tabPanelActivity" aria-labelledby="tabActivity" className="flex flex-col gap-8">
-              <ActivitiesTable activity={selected.data.activity} />
+              <ActivitiesTable
+                activity={selected.data.activity}
+                status={selected.status}
+                onOpenMarket={openMarket}
+                paging={{
+                  status: selected.activityPaging.status,
+                  error: selected.activityPaging.error,
+                  hasMore: selected.activityPaging.hasMore,
+                  loadMore: selected.loadMoreActivity,
+                }}
+              />
             </section>
           ) : null}
 

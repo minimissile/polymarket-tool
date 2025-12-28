@@ -71,7 +71,6 @@
 
 - `src/lib/copyTradeSim.ts`：模拟计算核心（BigInt 定点数计算、部分成交、跳过原因等）
 - `src/components/CopyTradeSimulator.tsx`：模拟器 UI（条件设置、回测/实时、报表导出、结果表格）
-- `src/lib/copyTradeSim.test.ts`：模拟器逻辑的单元测试（Node Test Runner）
 
 ### 数据流概览（从页面到渲染）
 

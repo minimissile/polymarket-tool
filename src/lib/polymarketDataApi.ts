@@ -77,7 +77,7 @@ type FetchJsonOptions = {
 }
 
 const BASE_URL = 'https://data-api.polymarket.com'
-const GAMMA_BASE_URL = 'https://gamma-api.polymarket.com'
+const GAMMA_BASE_URL = import.meta.env.DEV ? '/gamma-api' : 'https://gamma-api.polymarket.com'
 
 /** 以 JSON 方式请求 Data API，带超时与可选的 AbortSignal。 */
 async function fetchJson<T>(url: string, options?: FetchJsonOptions): Promise<T> {
@@ -120,6 +120,7 @@ function buildUrl(pathname: string, params: Record<string, string | number | boo
 }
 
 function buildGammaUrl(pathname: string) {
+  if (GAMMA_BASE_URL.startsWith('/')) return `${GAMMA_BASE_URL}${pathname}`
   return new URL(`${GAMMA_BASE_URL}${pathname}`).toString()
 }
 
