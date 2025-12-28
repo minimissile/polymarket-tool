@@ -2,6 +2,11 @@
 
 一个纯前端的 Polymarket 交易员分析工具：输入 EVM 地址即可拉取公开数据，查看交易/持仓/资金流水统计、可视化图表，并支持跟单回测与从“点击开始”起的实时跟踪模拟。
 
+## 仓库地址
+https://github.com/nuke-1337/polymarket
+
+预览地址：https://polymarket-tool-phi.vercel.app
+
 ## 核心功能
 
 ### 分析页（`/analyze`、`/trader/:user/:tab?`）
