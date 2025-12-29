@@ -26,7 +26,7 @@ function toCsv(rows: Record<string, string | number | boolean | null | undefined
     return s
   }
   const lines = [headers.join(',')]
-  for (const r of rows) lines.push(headers.map((h) => esc(r[h])).join(','))
+  for (const r of rows) lines.push(headers.map(h => esc(r[h])).join(','))
   return lines.join('\n')
 }
 
@@ -66,7 +66,7 @@ function parseMarketSlugFromInput(input: string) {
 
 async function fetchAllPages<T>(
   fetchPage: (offset: number, limit: number) => Promise<{ rows: T[]; rawCount: number }>,
-  options?: { pageSize?: number; maxPages?: number },
+  options?: { pageSize?: number; maxPages?: number }
 ) {
   const pageSize = options?.pageSize ?? 200
   const maxPages = options?.maxPages ?? 500
@@ -137,7 +137,7 @@ export default function ExportPage() {
   const appendLog = (line: string) => {
     const now = new Date()
     const ts = now.toLocaleTimeString()
-    setLogs((prev) => [...prev, `[${ts}] ${line}`])
+    setLogs(prev => [...prev, `[${ts}] ${line}`])
   }
 
   const canExportMarket = addressValid && slugValid && status !== 'running'
@@ -180,7 +180,11 @@ export default function ExportPage() {
       const pickMarketParamForTrades = async () => {
         for (const marketParam of candidates) {
           appendLog(`尝试 trades.market = ${marketParam} 采样…`)
-          const sample = await getTradesByUser(user, { limit: 30, offset: 0, market: marketParam, takerOnly: false }, { timeoutMs: 12_000 })
+          const sample = await getTradesByUser(
+            user,
+            { limit: 30, offset: 0, market: marketParam, takerOnly: false },
+            { timeoutMs: 12_000 }
+          )
           if (sample.some(tradeMatches)) {
             appendLog(`确认使用 trades.market = ${marketParam}`)
             return marketParam
@@ -204,17 +208,24 @@ export default function ExportPage() {
       }
 
       appendLog('检测可用的 market 参数…')
-      const [tradeMarketParam, activityMarketParam] = await Promise.all([pickMarketParamForTrades(), pickMarketParamForActivity()])
+      const [tradeMarketParam, activityMarketParam] = await Promise.all([
+        pickMarketParamForTrades(),
+        pickMarketParamForActivity()
+      ])
 
       appendLog('开始拉取 trades 全量数据…')
       const allTradesRaw = await fetchAllPages(
         async (offset, limit) => {
           if (cancelRef.current) return { rows: [], rawCount: 0 }
-          const page = await getTradesByUser(user, { limit, offset, market: tradeMarketParam, takerOnly: false }, { timeoutMs: 12_000 })
+          const page = await getTradesByUser(
+            user,
+            { limit, offset, market: tradeMarketParam, takerOnly: false },
+            { timeoutMs: 12_000 }
+          )
           appendLog(`trades 第 ${offset / limit + 1} 页：返回 ${page.length} 条`)
           return { rows: tradeMarketParam ? page : page.filter(tradeMatches), rawCount: page.length }
         },
-        { pageSize: 200, maxPages: 500 },
+        { pageSize: 200, maxPages: 500 }
       )
 
       appendLog('开始拉取 activity 全量数据…')
@@ -225,12 +236,21 @@ export default function ExportPage() {
           appendLog(`activity 第 ${offset / limit + 1} 页：返回 ${page.length} 条`)
           return { rows: activityMarketParam ? page : page.filter(activityMatches), rawCount: page.length }
         },
-        { pageSize: 200, maxPages: 500 },
+        { pageSize: 200, maxPages: 500 }
       )
 
       appendLog('开始去重与排序…')
 
-      const tradeKey = (t: { timestamp: number; transactionHash?: string; asset?: string; conditionId?: string; side?: string; outcomeIndex?: number; price?: number; size?: number }) => {
+      const tradeKey = (t: {
+        timestamp: number
+        transactionHash?: string
+        asset?: string
+        conditionId?: string
+        side?: string
+        outcomeIndex?: number
+        price?: number
+        size?: number
+      }) => {
         const hash = t.transactionHash?.trim()
         if (hash) return `${t.timestamp}:${hash}`
         return `${t.timestamp}:${t.asset ?? ''}:${t.conditionId ?? ''}:${t.side ?? ''}:${t.outcomeIndex ?? ''}:${t.price ?? ''}:${t.size ?? ''}`
@@ -262,11 +282,11 @@ export default function ExportPage() {
 
       appendLog(`去重后 trades ${dedupTrades.length} 条，activity ${dedupActivity.length} 条。`)
 
-      const jsonTrades = dedupTrades.map((t) => {
+      const jsonTrades = dedupTrades.map(t => {
         const { asset, eventSlug, conditionId, ...rest } = t
         return rest
       })
-      const jsonActivity = dedupActivity.map((a) => {
+      const jsonActivity = dedupActivity.map(a => {
         const { asset, eventSlug, conditionId, ...rest } = a
         return rest
       })
@@ -280,10 +300,10 @@ export default function ExportPage() {
           question: market?.question,
           conditionId: market?.conditionId,
           endDate: market?.endDate ?? market?.endDateIso,
-          resolutionSource: market?.resolutionSource,
+          resolutionSource: market?.resolutionSource
         },
         trades: jsonTrades,
-        activity: jsonActivity,
+        activity: jsonActivity
       }
 
       const fileSafeSlug = slug.replace(/[^a-z0-9._-]/gi, '_')
@@ -297,15 +317,15 @@ export default function ExportPage() {
         appendLog('已选择仅导出 JSON，跳过表格文件。')
         window.dispatchEvent(
           new CustomEvent('pmta:notify', {
-            detail: { message: `已导出 JSON：交易 ${dedupTrades.length} 笔 / 流水 ${dedupActivity.length} 条`, withTone: false },
-          }),
+            detail: { message: `已导出 JSON：交易 ${dedupTrades.length} 笔 / 流水 ${dedupActivity.length} 条`, withTone: false }
+          })
         )
         setStatus('done')
         return
       }
 
       appendLog(format === 'excel' ? '生成 trades Excel…' : '生成 trades CSV…')
-      const tradeRows = dedupTrades.map((t) => ({
+      const tradeRows = dedupTrades.map(t => ({
         ts: t.timestamp,
         time: formatDateTime(t.timestamp),
         side: t.side,
@@ -316,11 +336,11 @@ export default function ExportPage() {
         outcomeIndex: t.outcomeIndex ?? '',
         transactionHash: t.transactionHash ?? '',
         title: t.title ?? '',
-        slug: t.slug ?? '',
+        slug: t.slug ?? ''
       }))
 
       appendLog(format === 'excel' ? '生成 activity Excel…' : '生成 activity CSV…')
-      const activityRows = dedupActivity.map((a) => ({
+      const activityRows = dedupActivity.map(a => ({
         ts: a.timestamp,
         time: formatDateTime(a.timestamp),
         type: a.type,
@@ -332,7 +352,7 @@ export default function ExportPage() {
         outcomeIndex: a.outcomeIndex ?? '',
         transactionHash: a.transactionHash ?? '',
         title: a.title ?? '',
-        slug: a.slug ?? '',
+        slug: a.slug ?? ''
       }))
 
       if (format === 'csv') {
@@ -347,7 +367,7 @@ export default function ExportPage() {
           XLSX.utils.book_append_sheet(wb, ws, 'trades')
           const wbArray = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
           const blob = new Blob([wbArray], {
-            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
           })
           downloadBlobFile(`${baseName}.trades.xlsx`, blob)
         }
@@ -357,7 +377,7 @@ export default function ExportPage() {
           XLSX.utils.book_append_sheet(wb, ws, 'activity')
           const wbArray = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
           const blob = new Blob([wbArray], {
-            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
           })
           downloadBlobFile(`${baseName}.activity.xlsx`, blob)
         }
@@ -367,8 +387,8 @@ export default function ExportPage() {
 
       window.dispatchEvent(
         new CustomEvent('pmta:notify', {
-          detail: { message: `已导出：交易 ${dedupTrades.length} 笔 / 流水 ${dedupActivity.length} 条`, withTone: false },
-        }),
+          detail: { message: `已导出：交易 ${dedupTrades.length} 笔 / 流水 ${dedupActivity.length} 条`, withTone: false }
+        })
       )
 
       setStatus('done')
@@ -444,7 +464,7 @@ export default function ExportPage() {
           const minLabel = new Date(pageMinTs * 1000).toLocaleTimeString()
           const maxLabel = new Date(pageMaxTs * 1000).toLocaleTimeString()
           appendLog(
-            `trades 第 ${pageIndex + 1} 页：返回 ${page.length} 条，时间范围：${minLabel} ~ ${maxLabel}，累计 ${collected} 条`,
+            `trades 第 ${pageIndex + 1} 页：返回 ${page.length} 条，时间范围：${minLabel} ~ ${maxLabel}，累计 ${collected} 条`
           )
 
           if (pageMaxTs < fromSec) {
@@ -463,6 +483,7 @@ export default function ExportPage() {
         size?: number
         usdcSize?: number
         price?: number
+        side?: string
         conditionId?: string
         title?: string
         slug?: string
@@ -505,7 +526,7 @@ export default function ExportPage() {
           const minLabel = new Date(pageMinTs * 1000).toLocaleTimeString()
           const maxLabel = new Date(pageMaxTs * 1000).toLocaleTimeString()
           appendLog(
-            `activity 第 ${pageIndex + 1} 页：返回 ${page.length} 条，时间范围：${minLabel} ~ ${maxLabel}，累计 ${collected} 条`,
+            `activity 第 ${pageIndex + 1} 页：返回 ${page.length} 条，时间范围：${minLabel} ~ ${maxLabel}，累计 ${collected} 条`
           )
 
           if (pageMaxTs < fromSec) {
@@ -517,7 +538,16 @@ export default function ExportPage() {
 
       appendLog('按时间范围过滤、去重与排序…')
 
-      const tradeKey = (t: { timestamp: number; transactionHash?: string; asset?: string; conditionId?: string; side?: string; outcomeIndex?: number; price?: number; size?: number }) => {
+      const tradeKey = (t: {
+        timestamp: number
+        transactionHash?: string
+        asset?: string
+        conditionId?: string
+        side?: string
+        outcomeIndex?: number
+        price?: number
+        size?: number
+      }) => {
         const hash = t.transactionHash?.trim()
         if (hash) return `${t.timestamp}:${hash}`
         return `${t.timestamp}:${t.asset ?? ''}:${t.conditionId ?? ''}:${t.side ?? ''}:${t.outcomeIndex ?? ''}:${t.price ?? ''}:${t.size ?? ''}`
@@ -551,11 +581,11 @@ export default function ExportPage() {
 
       appendLog(`过滤后 trades ${dedupTrades.length} 条，activity ${dedupActivity.length} 条。`)
 
-      const jsonTrades = dedupTrades.map((t) => {
+      const jsonTrades = dedupTrades.map(t => {
         const { asset, eventSlug, conditionId, ...rest } = t
         return rest
       })
-      const jsonActivity = dedupActivity.map((a) => {
+      const jsonActivity = dedupActivity.map(a => {
         const { asset, eventSlug, conditionId, ...rest } = a
         return rest
       })
@@ -567,7 +597,7 @@ export default function ExportPage() {
         fromTs: Math.floor(fromSec),
         toTs: Math.floor(nowSec),
         trades: jsonTrades,
-        activity: jsonActivity,
+        activity: jsonActivity
       }
 
       const fileSafeUser = `${user.slice(0, 6)}_${user.slice(-4)}`
@@ -580,15 +610,15 @@ export default function ExportPage() {
         appendLog('已选择仅导出 JSON，跳过表格文件。')
         window.dispatchEvent(
           new CustomEvent('pmta:notify', {
-            detail: { message: `已导出 JSON：交易 ${dedupTrades.length} 笔 / 流水 ${dedupActivity.length} 条`, withTone: false },
-          }),
+            detail: { message: `已导出 JSON：交易 ${dedupTrades.length} 笔 / 流水 ${dedupActivity.length} 条`, withTone: false }
+          })
         )
         setStatus('done')
         return
       }
 
       appendLog(format === 'excel' ? '生成 trades Excel…' : '生成 trades CSV…')
-      const tradeRows = dedupTrades.map((t) => ({
+      const tradeRows = dedupTrades.map(t => ({
         ts: t.timestamp,
         time: formatDateTime(t.timestamp),
         side: t.side,
@@ -599,11 +629,11 @@ export default function ExportPage() {
         outcomeIndex: t.outcomeIndex ?? '',
         transactionHash: t.transactionHash ?? '',
         title: t.title ?? '',
-        slug: t.slug ?? '',
+        slug: t.slug ?? ''
       }))
 
       appendLog(format === 'excel' ? '生成 activity Excel…' : '生成 activity CSV…')
-      const activityRows = dedupActivity.map((a) => ({
+      const activityRows = dedupActivity.map(a => ({
         ts: a.timestamp,
         time: formatDateTime(a.timestamp),
         type: a.type,
@@ -615,7 +645,7 @@ export default function ExportPage() {
         outcomeIndex: a.outcomeIndex ?? '',
         transactionHash: a.transactionHash ?? '',
         title: a.title ?? '',
-        slug: a.slug ?? '',
+        slug: a.slug ?? ''
       }))
 
       if (format === 'csv') {
@@ -630,7 +660,7 @@ export default function ExportPage() {
           XLSX.utils.book_append_sheet(wb, ws, 'trades')
           const wbArray = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
           const blob = new Blob([wbArray], {
-            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
           })
           downloadBlobFile(`${baseName}.trades.xlsx`, blob)
         }
@@ -640,7 +670,7 @@ export default function ExportPage() {
           XLSX.utils.book_append_sheet(wb, ws, 'activity')
           const wbArray = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
           const blob = new Blob([wbArray], {
-            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
           })
           downloadBlobFile(`${baseName}.activity.xlsx`, blob)
         }
@@ -650,8 +680,8 @@ export default function ExportPage() {
 
       window.dispatchEvent(
         new CustomEvent('pmta:notify', {
-          detail: { message: `已导出：交易 ${dedupTrades.length} 笔 / 流水 ${dedupActivity.length} 条`, withTone: false },
-        }),
+          detail: { message: `已导出：交易 ${dedupTrades.length} 笔 / 流水 ${dedupActivity.length} 条`, withTone: false }
+        })
       )
 
       setStatus('done')
@@ -664,20 +694,22 @@ export default function ExportPage() {
   }
 
   return (
-    <main className="flex flex-col gap-8 w-full">
+    <main className="flex w-full flex-col gap-8">
       <div className="w-full">
         <div className="mb-4">
           <div className="text-xl font-bold text-slate-900 dark:text-slate-50">单市场记录导出</div>
-          <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">输入 Polymarket 市场 URL 和用户地址，导出该用户在该市场的全部交易与活动记录。</div>
+          <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            输入 Polymarket 市场 URL 和用户地址，导出该用户在该市场的全部交易与活动记录。
+          </div>
         </div>
 
-        <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-4">
-          <div className="flex gap-2 mb-3">
+        <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <div className="mb-3 flex gap-2">
             <button
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold border ${
+              className={`rounded-md border px-3 py-1.5 text-xs font-semibold ${
                 tab === 'market'
-                  ? 'bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 border-slate-900 dark:border-slate-50'
-                  : 'bg-slate-100 text-slate-600 dark:bg-slate-900 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                  ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-50 dark:bg-slate-50 dark:text-slate-900'
+                  : 'border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
               }`}
               onClick={() => {
                 if (status === 'running') return
@@ -687,10 +719,10 @@ export default function ExportPage() {
               单市场导出
             </button>
             <button
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold border ${
+              className={`rounded-md border px-3 py-1.5 text-xs font-semibold ${
                 tab === 'range'
-                  ? 'bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 border-slate-900 dark:border-slate-50'
-                  : 'bg-slate-100 text-slate-600 dark:bg-slate-900 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                  ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-50 dark:bg-slate-50 dark:text-slate-900'
+                  : 'border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
               }`}
               onClick={() => {
                 if (status === 'running') return
@@ -701,7 +733,7 @@ export default function ExportPage() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <div className="flex flex-col gap-1">
               {tab === 'market' ? (
                 <>
@@ -710,9 +742,9 @@ export default function ExportPage() {
                   </label>
                   <input
                     id="exportMarketInput"
-                    className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-50 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 focus:border-blue-500"
+                    className="w-full rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 font-mono text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:focus:ring-blue-900"
                     value={marketInput}
-                    onChange={(e) => setMarketInput(e.target.value)}
+                    onChange={e => setMarketInput(e.target.value)}
                     placeholder="https://polymarket.com/event/..."
                     autoCorrect="off"
                     autoCapitalize="none"
@@ -729,9 +761,9 @@ export default function ExportPage() {
                   </label>
                   <select
                     id="exportRange"
-                    className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 focus:border-blue-500"
+                    className="w-full rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:focus:ring-blue-900"
                     value={range}
-                    onChange={(e) => {
+                    onChange={e => {
                       const value = e.target.value
                       if (value === '1h' || value === '1d' || value === '7d') setRange(value as '1h' | '1d' | '7d')
                       else setRange('15m')
@@ -752,9 +784,9 @@ export default function ExportPage() {
               </label>
               <input
                 id="exportAddressInput"
-                className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-50 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 focus:border-blue-500"
+                className="w-full rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 font-mono text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:focus:ring-blue-900"
                 value={addressInput}
-                onChange={(e) => setAddressInput(e.target.value)}
+                onChange={e => setAddressInput(e.target.value)}
                 placeholder="0x..."
                 autoCorrect="off"
                 autoCapitalize="none"
@@ -770,9 +802,9 @@ export default function ExportPage() {
               </label>
               <select
                 id="exportFormat"
-                className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 focus:border-blue-500"
+                className="w-full rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:focus:ring-blue-900"
                 value={format}
-                onChange={(e) => {
+                onChange={e => {
                   const value = e.target.value
                   if (value === 'excel') setFormat('excel')
                   else if (value === 'csv') setFormat('csv')
@@ -805,7 +837,7 @@ export default function ExportPage() {
             </div>
             <div className="flex items-center gap-2">
               <button
-                className="px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-blue-600 border border-blue-600 text-white hover:bg-blue-700 hover:border-blue-700"
+                className="cursor-pointer rounded-lg border border-blue-600 bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:border-blue-700 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() => {
                   if (tab === 'market') void onExport()
                   else void onExportRange()
@@ -816,7 +848,7 @@ export default function ExportPage() {
                 {status === 'running' ? '导出中…' : '开始导出'}
               </button>
               <button
-                className="px-3 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-slate-200 border border-slate-300 text-slate-700 hover:bg-slate-300 hover:border-slate-400 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-50 dark:hover:bg-slate-600"
+                className="cursor-pointer rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition-all hover:border-slate-400 hover:bg-slate-300 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-50 dark:hover:bg-slate-600"
                 onClick={() => {
                   cancelRef.current = true
                   setStatus('idle')
@@ -830,13 +862,13 @@ export default function ExportPage() {
             </div>
           </div>
 
-          {error ? <div className="text-red-500 text-xs">导出失败：{error}</div> : null}
+          {error ? <div className="text-xs text-red-500">导出失败：{error}</div> : null}
 
           <div className="flex flex-col gap-2">
             <div className="text-xs font-medium text-slate-500 dark:text-slate-400">导出日志</div>
             <div
               ref={logRef}
-              className="h-48 bg-slate-950/90 dark:bg-slate-950 rounded-lg border border-slate-800 overflow-auto text-xs text-slate-100 font-mono p-3"
+              className="h-48 overflow-auto rounded-lg border border-slate-800 bg-slate-950/90 p-3 font-mono text-xs text-slate-100 dark:bg-slate-950"
             >
               {logs.length === 0 ? <div className="text-slate-500">点击「开始导出」后会在这里显示进度与详情。</div> : null}
               {logs.map((line, idx) => (
