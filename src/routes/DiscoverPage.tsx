@@ -15,7 +15,7 @@ export default function DiscoverPage() {
   useEffect(() => {
     if (status !== 'idle') return
     if (rows.length > 0) return
-    refresh()
+    refresh().then()
   }, [refresh, rows.length, status])
 
   /** 将热门交易员加入观察列表，并跳转到其详情页。 */
@@ -25,14 +25,8 @@ export default function DiscoverPage() {
   }
 
   return (
-    <main className="flex flex-col gap-8 w-full">
-      <TopTraders
-        rows={rows}
-        status={status}
-        error={error}
-        onRefresh={refresh}
-        onWatch={onWatch}
-      />
+    <main className="flex w-full flex-col gap-8">
+      <TopTraders rows={rows} status={status} error={error} onRefresh={refresh} onWatch={onWatch} />
     </main>
   )
 }
