@@ -771,7 +771,7 @@ export default function MarketPage() {
             <TradesTable
               trades={tradesInMarket}
               status={trader.status}
-              latestPricesByAssetId={latestPricesByAssetId}
+              // latestPricesByAssetId={latestPricesByAssetId}
               marketCloseTimeMs={marketCloseTimeMs}
               paging={{
                 status: trader.tradesPaging.status,
