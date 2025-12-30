@@ -38,12 +38,15 @@ function parseMaybeArray(value: unknown): unknown[] | undefined {
   return undefined
 }
 
+type TradeLogEntry = { text: string; highlighted: boolean }
+
 export default function SpreadWatchPage() {
   const [marketInput, setMarketInput] = useState('')
+  const [highlightAddressInput, setHighlightAddressInput] = useState('')
   const [state, setState] = useState<Status>({ status: 'idle' })
   const [spreadLogs, setSpreadLogs] = useState<string[]>([])
-  const [tradeLogsUp, setTradeLogsUp] = useState<string[]>([])
-  const [tradeLogsDown, setTradeLogsDown] = useState<string[]>([])
+  const [tradeLogsUp, setTradeLogsUp] = useState<TradeLogEntry[]>([])
+  const [tradeLogsDown, setTradeLogsDown] = useState<TradeLogEntry[]>([])
 
   const wsRef = useRef<WebSocket | null>(null)
   const wsPingIdRef = useRef<number | null>(null)
@@ -57,6 +60,10 @@ export default function SpreadWatchPage() {
   const tradeLogDownRef = useRef<HTMLDivElement | null>(null)
 
   const slug = useMemo(() => parseMarketSlugFromInput(marketInput), [marketInput])
+  const highlightAddress = useMemo(() => {
+    const v = highlightAddressInput.trim().toLowerCase()
+    return v || undefined
+  }, [highlightAddressInput])
 
   const appendSpreadLog = useCallback((line: string) => {
     setSpreadLogs(prev => {
@@ -72,13 +79,16 @@ export default function SpreadWatchPage() {
     el.scrollTop = el.scrollHeight
   }, [spreadLogs.length])
 
-  const appendTradeLogUp = useCallback((line: string) => {
-    setTradeLogsUp(prev => {
-      const next = [...prev, line]
-      if (next.length > 500) next.shift()
-      return next
-    })
-  }, [])
+  const appendTradeLogUp = useCallback(
+    (line: string, highlighted: boolean) => {
+      setTradeLogsUp(prev => {
+        const next = [...prev, { text: line, highlighted }]
+        if (next.length > 500) next.shift()
+        return next
+      })
+    },
+    [],
+  )
 
   useEffect(() => {
     const el = tradeLogUpRef.current
@@ -86,18 +96,21 @@ export default function SpreadWatchPage() {
     el.scrollTop = el.scrollHeight
   }, [tradeLogsUp.length])
 
-  const appendTradeLogDown = useCallback((line: string) => {
-    setTradeLogsDown(prev => {
-      const next = [...prev, line]
-      if (next.length > 500) next.shift()
-      return next
-    })
-  }, [])
+  const appendTradeLogDown = useCallback(
+    (line: string, highlighted: boolean) => {
+      setTradeLogsDown(prev => {
+        const next = [{ text: line, highlighted }, ...prev]
+        if (next.length > 500) next.pop()
+        return next
+      })
+    },
+    [],
+  )
 
   useEffect(() => {
     const el = tradeLogDownRef.current
     if (!el) return
-    el.scrollTop = el.scrollHeight
+    el.scrollTop = 0
   }, [tradeLogsDown.length])
 
   const stop = useCallback(() => {
@@ -119,8 +132,8 @@ export default function SpreadWatchPage() {
     hasLoggedSpreadRef.current = false
     setState({ status: 'idle' })
     appendSpreadLog(`[${new Date().toLocaleTimeString()}] 已停止监听`)
-    appendTradeLogUp(`[${new Date().toLocaleTimeString()}] 已停止监听`)
-    appendTradeLogDown(`[${new Date().toLocaleTimeString()}] 已停止监听`)
+    appendTradeLogUp(`[${new Date().toLocaleTimeString()}] 已停止监听`, false)
+    appendTradeLogDown(`[${new Date().toLocaleTimeString()}] 已停止监听`, false)
   }, [appendSpreadLog, appendTradeLogUp, appendTradeLogDown])
 
   const start = useCallback(async () => {
@@ -316,7 +329,7 @@ export default function SpreadWatchPage() {
       rtdsWsRef.current = rtds
 
       rtds.onopen = () => {
-        appendTradeLogUp(`[${new Date().toLocaleTimeString()}] RTDS 已连接，开始订阅成交流…`)
+        appendTradeLogUp(`[${new Date().toLocaleTimeString()}] RTDS 已连接，开始订阅成交流…`, false)
         const sub = {
           action: 'subscribe',
           subscriptions: [
@@ -388,16 +401,22 @@ export default function SpreadWatchPage() {
         const price =
           typeof priceRaw === 'number' ? priceRaw : typeof priceRaw === 'string' ? Number.parseFloat(priceRaw) : undefined
         const sizeText = size !== undefined && Number.isFinite(size) ? size.toFixed(4) : '?'
-        const priceText = price !== undefined && Number.isFinite(price) ? price.toFixed(4) : '?'
-        const pricePctText = price !== undefined && Number.isFinite(price) ? (price * 100).toFixed(2) : '?'
+        const priceText = price !== undefined && Number.isFinite(price) ? (price * 100).toFixed(2) : '?'
 
         const outcomeLower = typeof outcome === 'string' ? outcome.toLowerCase() : ''
         const upLower = upLabel.toLowerCase()
         const downLower = downLabel.toLowerCase()
-        const line = `[${ts}] 成交 ${sideText} ${outcome} @ ${priceText} (~${pricePctText}%)`
-        if (outcomeLower === upLower) appendTradeLogUp(line)
-        else if (outcomeLower === downLower) appendTradeLogDown(line)
-        else appendTradeLogUp(line)
+        const line = `[${ts}] ${sideText} ${outcome} @ ${priceText}`
+        const proxyRaw = payload.proxyWallet ?? payload.proxy_wallet
+        const proxyLower = typeof proxyRaw === 'string' ? proxyRaw.toLowerCase() : ''
+        const isHighlighted = Boolean(highlightAddress && proxyLower === highlightAddress)
+        if (outcomeLower === upLower) {
+          appendTradeLogUp(line, isHighlighted)
+        } else if (outcomeLower === downLower) {
+          appendTradeLogDown(line, isHighlighted)
+        } else {
+          appendTradeLogUp(line, isHighlighted)
+        }
       }
 
       rtds.onclose = () => {
@@ -411,7 +430,7 @@ export default function SpreadWatchPage() {
       setState({ status: 'error', error: message })
       appendSpreadLog(`[${new Date().toLocaleTimeString()}] 请求市场信息失败：${message}`)
     }
-  }, [appendSpreadLog, appendTradeLogDown, appendTradeLogUp, slug, state.status, stop])
+  }, [appendSpreadLog, appendTradeLogDown, appendTradeLogUp, highlightAddress, slug, state.status, stop])
 
   useEffect(() => {
     return () => {
@@ -494,6 +513,32 @@ export default function SpreadWatchPage() {
       </Card>
 
       <Card shadow="sm" radius="lg">
+        <CardHeader className="flex flex-col items-start gap-2">
+          <h2 className="text-sm font-semibold">高亮地址</h2>
+          <p className="text-foreground/70 text-[11px]">
+            输入需要重点关注的地址，如果成交记录中的 proxyWallet 与该地址完全一致，则在对应方向的成交日志中以红色高亮显示。
+          </p>
+        </CardHeader>
+        <CardBody>
+          <div className="flex flex-col gap-2 md:flex-row md:items-end">
+            <div className="flex-1">
+              <Input
+                label="Proxy Wallet 地址"
+                labelPlacement="outside"
+                size="sm"
+                value={highlightAddressInput}
+                onChange={e => setHighlightAddressInput(e.target.value)}
+                placeholder="0x 开头的地址，例如 0xabc...123"
+              />
+              <div className="text-foreground/60 mt-1 text-[11px]">
+                仅做精确匹配，不会自动补全或忽略大小写差异。
+              </div>
+            </div>
+          </div>
+        </CardBody>
+      </Card>
+
+      <Card shadow="sm" radius="lg">
         <CardHeader className="flex flex-col items-start gap-1">
           <h2 className="text-sm font-semibold">成交日志 - Up</h2>
           <p className="text-foreground/70 text-[11px]">只显示 Up 方向的成交（买入/卖出 + 价格）。</p>
@@ -506,7 +551,11 @@ export default function SpreadWatchPage() {
             {tradeLogsUp.length === 0 ? (
               <div className="text-foreground/60">连接成功并有 Up 成交后，这里会显示记录。</div>
             ) : (
-              tradeLogsUp.map((line, idx) => <div key={idx}>{line}</div>)
+              tradeLogsUp.map((entry, idx) => (
+                <div key={idx} className={entry.highlighted ? 'text-red-500 font-semibold' : undefined}>
+                  {entry.text}
+                </div>
+              ))
             )}
           </div>
         </CardBody>
@@ -525,7 +574,11 @@ export default function SpreadWatchPage() {
             {tradeLogsDown.length === 0 ? (
               <div className="text-foreground/60">连接成功并有 Down 成交后，这里会显示记录。</div>
             ) : (
-              tradeLogsDown.map((line, idx) => <div key={idx}>{line}</div>)
+              tradeLogsDown.map((entry, idx) => (
+                <div key={idx} className={entry.highlighted ? 'text-red-500 font-semibold' : undefined}>
+                  {entry.text}
+                </div>
+              ))
             )}
           </div>
         </CardBody>
