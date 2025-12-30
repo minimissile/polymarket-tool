@@ -8,6 +8,7 @@ const WatchlistPage = lazy(() => import('./routes/WatchlistPage'))
 const DiscoverPage = lazy(() => import('./routes/DiscoverPage'))
 const ExportPage = lazy(() => import('./routes/ExportPage'))
 const MarketPage = lazy(() => import('./routes/MarketPage'))
+const SpreadWatchPage = lazy(() => import('./routes/SpreadWatchPage'))
 
 /** 应用根组件：提供全局状态、懒加载路由与统一布局壳。 */
 function App() {
@@ -23,6 +24,7 @@ function App() {
             <Route path="/watchlist" element={<WatchlistPage />} />
             <Route path="/discover" element={<DiscoverPage />} />
             <Route path="/export" element={<ExportPage />} />
+            <Route path="/spread-watch" element={<SpreadWatchPage />} />
             <Route path="*" element={<Navigate to="/analyze" replace />} />
           </Route>
 
