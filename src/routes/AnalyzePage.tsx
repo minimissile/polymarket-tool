@@ -173,10 +173,49 @@ export default function AnalyzePage() {
       </div>
 
       {!routeUser ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 py-20 text-center dark:border-slate-700 dark:bg-slate-800/50">
-          <div className="mb-4 text-4xl">🔍</div>
-          <div className="text-lg font-medium text-slate-900 dark:text-slate-50">输入地址并点击「分析」后查看交易员详情</div>
-          <div className="mt-2 text-sm text-slate-500 dark:text-slate-400">支持查看交易热力图、持仓分布、资金曲线等详细数据</div>
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 py-20 text-center dark:border-slate-700 dark:bg-slate-800/50">
+            <div className="mb-4 text-4xl">🔍</div>
+            <div className="text-lg font-medium text-slate-900 dark:text-slate-50">输入地址并点击「分析」后查看交易员详情</div>
+            <div className="mt-2 text-sm text-slate-500 dark:text-slate-400">支持查看交易热力图、持仓分布、资金曲线等详细数据</div>
+          </div>
+
+          {/* 快捷入口卡片 */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <button
+              onClick={() => navigate('/tradingview')}
+              className="group relative overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 text-left transition-all hover:shadow-lg hover:border-blue-400 dark:hover:border-blue-600 hover:-translate-y-1"
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className="text-3xl">📈</div>
+                <div className="rounded-full bg-blue-100 dark:bg-blue-900/30 px-2 py-1 text-xs font-semibold text-blue-600 dark:text-blue-400">NEW</div>
+              </div>
+              <div className="text-lg font-bold text-slate-900 dark:text-slate-50 mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">TradingView 图表</div>
+              <div className="text-sm text-slate-600 dark:text-slate-400">查看 K线图、自定义价格线与交易标记点演示</div>
+            </button>
+
+            <button
+              onClick={() => navigate('/watchlist')}
+              className="group relative overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 text-left transition-all hover:shadow-lg hover:border-green-400 dark:hover:border-green-600 hover:-translate-y-1"
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className="text-3xl">👀</div>
+              </div>
+              <div className="text-lg font-bold text-slate-900 dark:text-slate-50 mb-2 group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors">观察列表</div>
+              <div className="text-sm text-slate-600 dark:text-slate-400">管理关注的交易员，实时追踪新交易</div>
+            </button>
+
+            <button
+              onClick={() => navigate('/discover')}
+              className="group relative overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 text-left transition-all hover:shadow-lg hover:border-purple-400 dark:hover:border-purple-600 hover:-translate-y-1"
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className="text-3xl">🔥</div>
+              </div>
+              <div className="text-lg font-bold text-slate-900 dark:text-slate-50 mb-2 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">发现热门</div>
+              <div className="text-sm text-slate-600 dark:text-slate-400">探索最近活跃的热门交易员</div>
+            </button>
+          </div>
         </div>
       ) : (
         <>
