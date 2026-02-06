@@ -1,6 +1,9 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getGammaMarketBySlug, type DataApiActivity, type GammaMarket } from '../lib/polymarketDataApi'
-import { formatDateTime, formatNumber, formatRelativeTime, formatUsd } from '../lib/format'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { MarketDetailsPanel } from './MarketDetailsPanel'
+import { useInfiniteScrollTrigger } from '../hooks/useInfiniteScrollTrigger'
+import { useMarketDetailsBySlug, type MarketDetailState } from '../hooks/useMarketDetailsBySlug'
+import { type DataApiActivity } from '../lib/polymarketDataApi'
+import { formatClockTime, formatDateTime, formatNumber, formatRelativeTime, formatUsd } from '../lib/format'
 
 type ActivityFeatures = Partial<{
   showIcon: boolean
@@ -8,12 +11,6 @@ type ActivityFeatures = Partial<{
   highlightRecent: boolean
   enableMarketDetails: boolean
 }>
-
-type MarketDetailState =
-  | { status: 'idle' }
-  | { status: 'loading' }
-  | { status: 'ready'; data: GammaMarket }
-  | { status: 'error'; error: string }
 
 export function ActivitiesTable(props: {
   activity: DataApiActivity[]
@@ -32,7 +29,6 @@ export function ActivitiesTable(props: {
   const maxRows = props.maxRows ?? 5000
   const pageSize = Math.min(50, maxRows)
   const [visiblePages, setVisiblePages] = useState(1)
-  const sentinelRef = useRef<HTMLDivElement | null>(null)
 
   const features = useMemo(() => {
     return {
@@ -60,30 +56,9 @@ export function ActivitiesTable(props: {
     return latest > 0 ? latest : undefined
   }, [props.activity])
 
-  const [expandedBySlug, setExpandedBySlug] = useState<Record<string, boolean>>({})
-  const [marketBySlug, setMarketBySlug] = useState<Record<string, MarketDetailState>>({})
-  const marketBySlugRef = useRef<Record<string, MarketDetailState>>({})
-  const abortBySlugRef = useRef<Record<string, AbortController>>({})
-
-  useEffect(() => {
-    marketBySlugRef.current = marketBySlug
-  }, [marketBySlug])
+  const { expandedBySlug, marketBySlug, fetchMarket, toggleDetails } = useMarketDetailsBySlug({ onOpenMarket: props.onOpenMarket })
 
   const colCount = 8 + (features.enableMarketDetails ? 1 : 0)
-
-  const parseMaybeArray = (value: unknown): unknown[] | undefined => {
-    if (!value) return undefined
-    if (Array.isArray(value)) return value
-    if (typeof value === 'string') {
-      try {
-        const parsed = JSON.parse(value) as unknown
-        return Array.isArray(parsed) ? parsed : undefined
-      } catch {
-        return undefined
-      }
-    }
-    return undefined
-  }
 
   const formatTimeCell = (epochSeconds: number) => {
     const abs = formatDateTime(epochSeconds)
@@ -95,36 +70,6 @@ export function ActivitiesTable(props: {
     const hash = a.transactionHash?.trim()
     if (hash) return `${a.timestamp}:${hash}:${a.type}`
     return `${a.timestamp}:${a.type}:${a.asset ?? ''}:${a.conditionId ?? ''}:${a.side ?? ''}:${a.outcomeIndex ?? ''}:${a.price ?? ''}:${a.size ?? ''}:${a.usdcSize ?? ''}`
-  }
-
-  const fetchMarket = async (slug: string) => {
-    const key = slug.toLowerCase()
-    const existing = marketBySlugRef.current[key]
-    if (existing?.status === 'loading' || existing?.status === 'ready') return
-
-    abortBySlugRef.current[key]?.abort()
-    const controller = new AbortController()
-    abortBySlugRef.current[key] = controller
-
-    setMarketBySlug((prev) => ({ ...prev, [key]: { status: 'loading' } }))
-    try {
-      const data = await getGammaMarketBySlug(key, { signal: controller.signal, timeoutMs: 12_000 })
-      setMarketBySlug((prev) => ({ ...prev, [key]: { status: 'ready', data } }))
-    } catch (e) {
-      const message = e instanceof Error ? e.message : '请求失败'
-      setMarketBySlug((prev) => ({ ...prev, [key]: { status: 'error', error: message } }))
-    }
-  }
-
-  const toggleDetails = (slug: string) => {
-    if (props.onOpenMarket) {
-      const key = slug.toLowerCase()
-      props.onOpenMarket(key)
-      return
-    }
-    const key = slug.toLowerCase()
-    setExpandedBySlug((prev) => ({ ...prev, [key]: !prev[key] }))
-    void fetchMarket(key)
   }
 
   const filtered = useMemo(() => {
@@ -156,20 +101,10 @@ export function ActivitiesTable(props: {
     if (canFetchMore && !isPagingLoading) props.paging?.loadMore()
   }, [canFetchMore, canRevealMore, isPagingLoading, props.paging])
 
-  useEffect(() => {
-    if (!canRevealMore && !canFetchMore) return
-    const el = sentinelRef.current
-    if (!el) return
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) loadMore()
-      },
-      { root: null, rootMargin: '240px 0px', threshold: 0 },
-    )
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [canFetchMore, canRevealMore, loadMore])
+  const sentinelRef = useInfiniteScrollTrigger<HTMLDivElement>({
+    enabled: canRevealMore || canFetchMore,
+    onTrigger: loadMore,
+  })
 
   const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount])
 
@@ -260,9 +195,6 @@ export function ActivitiesTable(props: {
                     : a.size !== undefined && a.price !== undefined
                       ? a.size * a.price
                       : undefined
-
-                const outcomes = marketState?.status === 'ready' ? parseMaybeArray(marketState.data.outcomes) : undefined
-                const outcomePrices = marketState?.status === 'ready' ? parseMaybeArray(marketState.data.outcomePrices) : undefined
 
                 return (
                   <Fragment key={rowKey}>
@@ -355,108 +287,7 @@ export function ActivitiesTable(props: {
                     {features.enableMarketDetails && slugKey && expanded ? (
                       <tr id={`activityDetails:${slugKey}`}>
                         <td colSpan={colCount} className="px-4 py-4 border-b border-slate-100 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-900/20">
-                          {marketState?.status === 'loading' ? (
-                            <div className="text-sm text-slate-500 dark:text-slate-400">加载详情中…</div>
-                          ) : marketState?.status === 'error' ? (
-                            <div className="flex flex-col gap-2">
-                              <div className="text-sm text-red-500">加载失败：{marketState.error}</div>
-                              <div>
-                                <button
-                                  className="px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer bg-blue-600 border border-blue-600 text-white hover:bg-blue-700 hover:border-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                  onClick={() => fetchMarket(slugKey)}
-                                  aria-label={`重试加载 ${slugKey} 市场详情`}
-                                >
-                                  重试
-                                </button>
-                              </div>
-                            </div>
-                          ) : marketState?.status === 'ready' ? (
-                            <div className="flex flex-col gap-3">
-                              <div className="flex items-start justify-between gap-4">
-                                <div className="min-w-0">
-                                  <div className="text-sm font-semibold text-slate-900 dark:text-slate-50 truncate" title={marketState.data.question ?? slugKey}>
-                                    {marketState.data.question ?? slugKey}
-                                  </div>
-                                  <div className="text-xs text-slate-500 dark:text-slate-400 font-mono break-all">slug: {slugKey}</div>
-                                </div>
-                                <a
-                                  className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline whitespace-nowrap"
-                                  href={`https://polymarket.com/market/${slugKey}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  打开页面
-                                </a>
-                              </div>
-
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                                <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-                                  <div className="text-slate-500 dark:text-slate-400">结束时间</div>
-                                  <div className="text-slate-900 dark:text-slate-50 font-mono mt-1">
-                                    {marketState.data.endDateIso ?? marketState.data.endDate ?? '—'}
-                                  </div>
-                                </div>
-                                <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-                                  <div className="text-slate-500 dark:text-slate-400">成交量</div>
-                                  <div className="text-slate-900 dark:text-slate-50 font-mono mt-1">
-                                    {marketState.data.volumeNum !== undefined ? formatNumber(marketState.data.volumeNum) : '—'}
-                                  </div>
-                                </div>
-                                <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-                                  <div className="text-slate-500 dark:text-slate-400">流动性</div>
-                                  <div className="text-slate-900 dark:text-slate-50 font-mono mt-1">
-                                    {marketState.data.liquidityNum !== undefined ? formatNumber(marketState.data.liquidityNum) : '—'}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {outcomes && outcomes.length > 0 ? (
-                                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-                                  <table className="w-full border-collapse text-sm">
-                                    <thead>
-                                      <tr>
-                                        <th className="text-left px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
-                                          Outcome
-                                        </th>
-                                        <th className="text-left px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
-                                          Price
-                                        </th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {outcomes.map((o, idx) => {
-                                        const p = outcomePrices?.[idx]
-                                        const priceText =
-                                          typeof p === 'number'
-                                            ? formatNumber(p, { maximumFractionDigits: 4 })
-                                            : typeof p === 'string'
-                                              ? p
-                                              : p === undefined
-                                                ? '—'
-                                                : String(p)
-                                        return (
-                                          <tr key={`${slugKey}:outcome:${idx}`} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                                            <td className="px-4 py-2 border-b border-slate-100 dark:border-slate-700/50 text-slate-900 dark:text-slate-50">
-                                              {typeof o === 'string' ? o : JSON.stringify(o)}
-                                            </td>
-                                            <td className="px-4 py-2 border-b border-slate-100 dark:border-slate-700/50 text-slate-900 dark:text-slate-50 font-mono">
-                                              {priceText}
-                                            </td>
-                                          </tr>
-                                        )
-                                      })}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              ) : null}
-
-                              {marketState.data.description ? (
-                                <div className="text-xs text-slate-500 dark:text-slate-400 whitespace-pre-wrap">{marketState.data.description}</div>
-                              ) : null}
-                            </div>
-                          ) : (
-                            <div className="text-sm text-slate-500 dark:text-slate-400">暂无详情</div>
-                          )}
+                          <MarketDetailsPanel slugKey={slugKey} marketState={marketState} onRetry={() => fetchMarket(slugKey)} />
                         </td>
                       </tr>
                     ) : null}
@@ -471,11 +302,7 @@ export function ActivitiesTable(props: {
             </div>
             <div className="text-xs text-slate-500 dark:text-slate-400 font-mono whitespace-nowrap">
               最后更新时间：
-              {lastUpdatedEpochSeconds !== undefined
-                ? new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(
-                    new Date(lastUpdatedEpochSeconds * 1000),
-                  )
-                : '—'}
+              {lastUpdatedEpochSeconds !== undefined ? formatClockTime(lastUpdatedEpochSeconds) : '—'}
               {canRevealMore
                 ? '（滚动加载中…）'
                 : isPagingLoading || canFetchMore

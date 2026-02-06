@@ -38,6 +38,16 @@ export function formatDateTime(epochSeconds: number) {
   }).format(date)
 }
 
+/** 将秒级 epoch 时间戳格式化为 HH:mm:ss。 */
+export function formatClockTime(epochSeconds: number) {
+  const date = new Date(epochSeconds * 1000)
+  return new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(date)
+}
+
 export function formatRelativeTime(epochSeconds: number, nowMs: number = Date.now()) {
   const deltaMs = nowMs - epochSeconds * 1000
   const absMs = Math.abs(deltaMs)
