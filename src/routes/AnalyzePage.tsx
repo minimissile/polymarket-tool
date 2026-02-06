@@ -45,8 +45,7 @@ export default function AnalyzePage() {
 
   const [addressInput, setAddressInput] = useState(() => {
     if (routeUser) return routeUser
-    const last = readJson<string>('pmta.lastAddressInput', '')
-    return last
+    return readJson<string>('pmta.lastAddressInput', '')
   })
 
   const normalizedInput = useMemo(() => normalizeAddress(addressInput), [addressInput])
@@ -85,13 +84,13 @@ export default function AnalyzePage() {
       lastNotifiedLatestTradeTsRef.current = latestTs
       return
     }
-    const newCount = selected.data.trades.filter((t) => t.timestamp > lastNotifiedLatestTradeTsRef.current).length
+    const newCount = selected.data.trades.filter(t => t.timestamp > lastNotifiedLatestTradeTsRef.current).length
     lastNotifiedLatestTradeTsRef.current = latestTs
     const short = `${routeUser.slice(0, 6)}…${routeUser.slice(-4)}`
     window.dispatchEvent(
       new CustomEvent('pmta:notify', {
-        detail: { message: `检测到新交易：${short} ${newCount} 笔` },
-      }),
+        detail: { message: `检测到新交易：${short} ${newCount} 笔` }
+      })
     )
   }, [routeUser, selected.data.trades])
 
@@ -127,7 +126,7 @@ export default function AnalyzePage() {
     const lastSeenTradeTs = lastSeenByUser[routeUser.toLowerCase()] ?? 0
     const latestTs = selected.data.trades.reduce((acc, t) => Math.max(acc, t.timestamp), 0)
     if (latestTs <= lastSeenTradeTs) return 0
-    return selected.data.trades.filter((t) => t.timestamp > lastSeenTradeTs).length
+    return selected.data.trades.filter(t => t.timestamp > lastSeenTradeTs).length
   }, [lastSeenByUser, routeUser, selected.data.trades])
 
   /** 将当前用户最新一笔交易时间戳写入“已读”，用于清零新交易提示。 */
@@ -151,7 +150,7 @@ export default function AnalyzePage() {
   }
 
   return (
-    <main className="flex flex-col gap-8 w-full">
+    <main className="flex w-full flex-col gap-8">
       <div className="w-full">
         <AddressBar
           value={addressInput}
@@ -161,39 +160,48 @@ export default function AnalyzePage() {
           disabled={selected.status === 'loading'}
         />
         {inputValid ? (
-          <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-sm flex items-start gap-2">
-            <span className="font-semibold whitespace-nowrap">提示：</span>
+          <div className="mt-4 flex items-start gap-2 rounded-lg bg-blue-50 p-4 text-sm text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
+            <span className="whitespace-nowrap font-semibold">提示：</span>
             「分析」会跳转到该交易员详情页；「观察」会加入观察列表并后台更新。
           </div>
         ) : (
-          <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-lg text-sm flex items-start gap-2">
-            <span className="font-semibold whitespace-nowrap">提示：</span>
+          <div className="mt-4 flex items-start gap-2 rounded-lg bg-slate-50 p-4 text-sm text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+            <span className="whitespace-nowrap font-semibold">提示：</span>
             输入 `0x` 开头的 EVM 地址
           </div>
         )}
       </div>
 
       {!routeUser ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
-          <div className="text-4xl mb-4">🔍</div>
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 py-20 text-center dark:border-slate-700 dark:bg-slate-800/50">
+          <div className="mb-4 text-4xl">🔍</div>
           <div className="text-lg font-medium text-slate-900 dark:text-slate-50">输入地址并点击「分析」后查看交易员详情</div>
-          <div className="text-sm text-slate-500 dark:text-slate-400 mt-2">支持查看交易热力图、持仓分布、资金曲线等详细数据</div>
+          <div className="mt-2 text-sm text-slate-500 dark:text-slate-400">支持查看交易热力图、持仓分布、资金曲线等详细数据</div>
         </div>
       ) : (
         <>
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-6 border-b border-slate-200 dark:border-slate-700">
+          <div className="flex flex-col items-start justify-between gap-4 border-b border-slate-200 pb-6 md:flex-row md:items-center dark:border-slate-700">
             <div className="flex flex-col gap-1">
               <div className="text-sm font-medium text-slate-500 dark:text-slate-400">当前交易员</div>
-              <div className="font-mono text-xl md:text-2xl font-bold text-slate-900 dark:text-slate-50 break-all">{routeUser}</div>
+              <div className="break-all font-mono text-xl font-bold text-slate-900 md:text-2xl dark:text-slate-50">
+                {routeUser}
+              </div>
             </div>
-            <div className="flex flex-col items-start md:items-end gap-2">
+            <div className="flex flex-col items-start gap-2 md:items-end">
               {newTradeCount > 0 ? (
-                <div className="flex items-center gap-3 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 rounded-full border border-emerald-100 dark:border-emerald-800">
-                  <span className="px-1.5 py-0.5 bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wider rounded-sm animate-pulse" aria-label="检测到新交易">
+                <div className="flex items-center gap-3 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 dark:border-emerald-800 dark:bg-emerald-900/20">
+                  <span
+                    className="animate-pulse rounded-sm bg-emerald-500 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white"
+                    aria-label="检测到新交易"
+                  >
                     实时
                   </span>
                   <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">新交易 {newTradeCount} 笔</span>
-                  <button className="text-xs font-semibold text-emerald-600 dark:text-emerald-500 hover:text-emerald-800 dark:hover:text-emerald-300 underline decoration-emerald-300 dark:decoration-emerald-700" onClick={markAsSeen} aria-label="标记新交易为已读">
+                  <button
+                    className="text-xs font-semibold text-emerald-600 underline decoration-emerald-300 hover:text-emerald-800 dark:text-emerald-500 dark:decoration-emerald-700 dark:hover:text-emerald-300"
+                    onClick={markAsSeen}
+                    aria-label="标记新交易为已读"
+                  >
                     已读
                   </button>
                 </div>
@@ -201,7 +209,9 @@ export default function AnalyzePage() {
               {selected.status === 'loading' ? <span className="text-xs text-slate-400">加载中…</span> : null}
               {selected.error ? <span className="text-xs text-red-500">数据更新失败：{selected.error}</span> : null}
               {selected.data.lastUpdatedAtMs ? (
-                <span className="text-xs text-slate-400">最近刷新：{new Date(selected.data.lastUpdatedAtMs).toLocaleTimeString()}</span>
+                <span className="text-xs text-slate-400">
+                  最近刷新：{new Date(selected.data.lastUpdatedAtMs).toLocaleTimeString()}
+                </span>
               ) : null}
             </div>
           </div>
@@ -209,7 +219,7 @@ export default function AnalyzePage() {
           <div className="flex border-b border-slate-200 dark:border-slate-700">
             <div className="flex gap-1" role="tablist" aria-label="分析模块">
               <button
-                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'overview' ? 'border-slate-900 text-slate-900 dark:border-slate-50 dark:text-slate-50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300 dark:hover:border-slate-600'}`}
+                className={`border-b-2 px-6 py-3 text-sm font-medium transition-colors ${activeTab === 'overview' ? 'border-slate-900 text-slate-900 dark:border-slate-50 dark:text-slate-50' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-300'}`}
                 onClick={() => setTab('overview')}
                 role="tab"
                 aria-selected={activeTab === 'overview'}
@@ -219,7 +229,7 @@ export default function AnalyzePage() {
                 概览
               </button>
               <button
-                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'positions' ? 'border-slate-900 text-slate-900 dark:border-slate-50 dark:text-slate-50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300 dark:hover:border-slate-600'}`}
+                className={`border-b-2 px-6 py-3 text-sm font-medium transition-colors ${activeTab === 'positions' ? 'border-slate-900 text-slate-900 dark:border-slate-50 dark:text-slate-50' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-300'}`}
                 onClick={() => setTab('positions')}
                 role="tab"
                 aria-selected={activeTab === 'positions'}
@@ -229,7 +239,7 @@ export default function AnalyzePage() {
                 持仓
               </button>
               <button
-                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'trades' ? 'border-slate-900 text-slate-900 dark:border-slate-50 dark:text-slate-50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300 dark:hover:border-slate-600'}`}
+                className={`border-b-2 px-6 py-3 text-sm font-medium transition-colors ${activeTab === 'trades' ? 'border-slate-900 text-slate-900 dark:border-slate-50 dark:text-slate-50' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-300'}`}
                 onClick={() => setTab('trades')}
                 role="tab"
                 aria-selected={activeTab === 'trades'}
@@ -239,7 +249,7 @@ export default function AnalyzePage() {
                 交易
               </button>
               <button
-                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'activity' ? 'border-slate-900 text-slate-900 dark:border-slate-50 dark:text-slate-50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300 dark:hover:border-slate-600'}`}
+                className={`border-b-2 px-6 py-3 text-sm font-medium transition-colors ${activeTab === 'activity' ? 'border-slate-900 text-slate-900 dark:border-slate-50 dark:text-slate-50' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-300'}`}
                 onClick={() => setTab('activity')}
                 role="tab"
                 aria-selected={activeTab === 'activity'}
@@ -249,7 +259,7 @@ export default function AnalyzePage() {
                 流水
               </button>
               <button
-                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'copy' ? 'border-slate-900 text-slate-900 dark:border-slate-50 dark:text-slate-50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300 dark:hover:border-slate-600'}`}
+                className={`border-b-2 px-6 py-3 text-sm font-medium transition-colors ${activeTab === 'copy' ? 'border-slate-900 text-slate-900 dark:border-slate-50 dark:text-slate-50' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-300'}`}
                 onClick={() => setTab('copy')}
                 role="tab"
                 aria-selected={activeTab === 'copy'}
@@ -264,66 +274,90 @@ export default function AnalyzePage() {
           {activeTab === 'overview' ? (
             <section role="tabpanel" id="tabPanelOverview" aria-labelledby="tabOverview" className="flex flex-col gap-8">
               {selectedSummary ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                    <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">现金收益</div>
-                    <div className={`text-xl md:text-2xl font-bold font-mono ${selectedSummary.cashPnl >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                    <div className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">现金收益</div>
+                    <div
+                      className={`font-mono text-xl font-bold md:text-2xl ${selectedSummary.cashPnl >= 0 ? 'text-emerald-500' : 'text-red-500'}`}
+                    >
                       {formatUsd(selectedSummary.cashPnl)}
                     </div>
                   </div>
-                  <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                    <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">收益率（估算）</div>
-                    <div className={`text-xl md:text-2xl font-bold font-mono ${selectedSummary.percentPnl >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                    <div className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">收益率（估算）</div>
+                    <div
+                      className={`font-mono text-xl font-bold md:text-2xl ${selectedSummary.percentPnl >= 0 ? 'text-emerald-500' : 'text-red-500'}`}
+                    >
                       {formatPercent(selectedSummary.percentPnl)}
                     </div>
                   </div>
-                  <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                    <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">交易量（USDC）</div>
-                    <div className="text-xl md:text-2xl font-bold font-mono text-slate-900 dark:text-slate-50">{formatUsd(selectedSummary.tradeVolumeUsd)}</div>
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                    <div className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">交易量（USDC）</div>
+                    <div className="font-mono text-xl font-bold text-slate-900 md:text-2xl dark:text-slate-50">
+                      {formatUsd(selectedSummary.tradeVolumeUsd)}
+                    </div>
                   </div>
-                  <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                    <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">交易数</div>
-                    <div className="text-xl md:text-2xl font-bold font-mono text-slate-900 dark:text-slate-50">{selectedSummary.tradeCount}</div>
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                    <div className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">交易数</div>
+                    <div className="font-mono text-xl font-bold text-slate-900 md:text-2xl dark:text-slate-50">
+                      {selectedSummary.tradeCount}
+                    </div>
                   </div>
-                  <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                    <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">持仓市值</div>
-                    <div className="text-xl md:text-2xl font-bold font-mono text-slate-900 dark:text-slate-50">{formatUsd(selectedSummary.currentValue)}</div>
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                    <div className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">持仓市值</div>
+                    <div className="font-mono text-xl font-bold text-slate-900 md:text-2xl dark:text-slate-50">
+                      {formatUsd(selectedSummary.currentValue)}
+                    </div>
                   </div>
-                  <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                    <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">最近交易</div>
-                    <div className="text-xl md:text-2xl font-bold font-mono text-slate-900 dark:text-slate-50">{selectedSummary.lastTradeTs ? formatDateTime(selectedSummary.lastTradeTs) : '—'}</div>
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                    <div className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">最近交易</div>
+                    <div className="font-mono text-xl font-bold text-slate-900 md:text-2xl dark:text-slate-50">
+                      {selectedSummary.lastTradeTs ? formatDateTime(selectedSummary.lastTradeTs) : '—'}
+                    </div>
                   </div>
                   {selectedProfile ? (
                     <>
-                      <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                        <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">持仓偏好</div>
-                        <div className="text-xl md:text-2xl font-bold font-mono text-slate-900 dark:text-slate-50">{selectedProfile.holdingPreference}</div>
-                      </div>
-                      <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                        <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">活跃时段</div>
-                        <div className="text-sm font-medium text-slate-900 dark:text-slate-50 mt-2 break-words">
-                          {selectedProfile.activeHours.length ? selectedProfile.activeHours.map((h) => `${h}:00`).join(' / ') : '—'}
+                      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                        <div className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">持仓偏好</div>
+                        <div className="font-mono text-xl font-bold text-slate-900 md:text-2xl dark:text-slate-50">
+                          {selectedProfile.holdingPreference}
                         </div>
                       </div>
-                      <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                        <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">单笔均值</div>
-                        <div className="text-xl md:text-2xl font-bold font-mono text-slate-900 dark:text-slate-50">{formatUsd(selectedProfile.avgTradeUsd)}</div>
+                      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                        <div className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">活跃时段</div>
+                        <div className="mt-2 break-words text-sm font-medium text-slate-900 dark:text-slate-50">
+                          {selectedProfile.activeHours.length ? selectedProfile.activeHours.map(h => `${h}:00`).join(' / ') : '—'}
+                        </div>
                       </div>
-                      <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                        <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">最大单笔（近似）</div>
-                        <div className="text-xl md:text-2xl font-bold font-mono text-slate-900 dark:text-slate-50">{formatUsd(selectedProfile.maxSingleTradeUsd)}</div>
+                      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                        <div className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">单笔均值</div>
+                        <div className="font-mono text-xl font-bold text-slate-900 md:text-2xl dark:text-slate-50">
+                          {formatUsd(selectedProfile.avgTradeUsd)}
+                        </div>
                       </div>
-                      <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                        <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">交易尺度稳定性（CV）</div>
-                        <div className="text-xl md:text-2xl font-bold font-mono text-slate-900 dark:text-slate-50">{formatNumber(selectedProfile.tradeSizeCv, { maximumFractionDigits: 2 })}</div>
+                      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                        <div className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">最大单笔（近似）</div>
+                        <div className="font-mono text-xl font-bold text-slate-900 md:text-2xl dark:text-slate-50">
+                          {formatUsd(selectedProfile.maxSingleTradeUsd)}
+                        </div>
                       </div>
-                      <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                        <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">P90 单笔（近似）</div>
-                        <div className="text-xl md:text-2xl font-bold font-mono text-slate-900 dark:text-slate-50">{formatUsd(selectedProfile.p90TradeUsd)}</div>
+                      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                        <div className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">交易尺度稳定性（CV）</div>
+                        <div className="font-mono text-xl font-bold text-slate-900 md:text-2xl dark:text-slate-50">
+                          {formatNumber(selectedProfile.tradeSizeCv, { maximumFractionDigits: 2 })}
+                        </div>
                       </div>
-                      <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                        <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">单市场集中度</div>
-                        <div className="text-xl md:text-2xl font-bold font-mono text-slate-900 dark:text-slate-50">{formatPercent(selectedProfile.topMarketConcentration * 100)}</div>
+                      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                        <div className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">P90 单笔（近似）</div>
+                        <div className="font-mono text-xl font-bold text-slate-900 md:text-2xl dark:text-slate-50">
+                          {formatUsd(selectedProfile.p90TradeUsd)}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                        <div className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">单市场集中度</div>
+                        <div className="font-mono text-xl font-bold text-slate-900 md:text-2xl dark:text-slate-50">
+                          {formatPercent(selectedProfile.topMarketConcentration * 100)}
+                        </div>
                       </div>
                     </>
                   ) : null}
@@ -350,7 +384,7 @@ export default function AnalyzePage() {
                   status: selected.tradesPaging.status,
                   error: selected.tradesPaging.error,
                   hasMore: selected.tradesPaging.hasMore,
-                  loadMore: selected.loadMoreTrades,
+                  loadMore: selected.loadMoreTrades
                 }}
               />
             </section>
@@ -366,7 +400,7 @@ export default function AnalyzePage() {
                   status: selected.activityPaging.status,
                   error: selected.activityPaging.error,
                   hasMore: selected.activityPaging.hasMore,
-                  loadMore: selected.loadMoreActivity,
+                  loadMore: selected.loadMoreActivity
                 }}
               />
             </section>
@@ -374,7 +408,13 @@ export default function AnalyzePage() {
 
           {activeTab === 'copy' ? (
             <section role="tabpanel" id="tabPanelCopy" aria-labelledby="tabCopy" className="flex flex-col gap-8">
-              <CopyTradeSimulator user={routeUser} trades={selected.data.trades} activity={selected.data.activity} status={selected.status} error={selected.error} />
+              <CopyTradeSimulator
+                user={routeUser}
+                trades={selected.data.trades}
+                activity={selected.data.activity}
+                status={selected.status}
+                error={selected.error}
+              />
             </section>
           ) : null}
         </>
