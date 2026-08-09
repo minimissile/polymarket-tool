@@ -39,4 +39,7 @@ function App() {
   )
 }
 
+// curl --request GET \
+//   --url https://gamma-api.polymarket.com/markets/slug/bitcoin-up-or-down-february-5-10pm-et
+
 export default App

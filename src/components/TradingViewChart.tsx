@@ -64,6 +64,26 @@ export function TradingViewChart(props: TradingViewChartProps) {
       borderDownColor: '#ef4444',
       wickUpColor: '#10b981',
       wickDownColor: '#ef4444',
+      // 自定义自动缩放逻辑：确保所有价格线都在可视范围内
+      autoscaleInfoProvider: (original) => {
+        const res = original()
+        if (res && priceLines.length > 0) {
+          let { minValue, maxValue } = res.priceRange
+          priceLines.forEach((line) => {
+            if (line.price < minValue) minValue = line.price
+            if (line.price > maxValue) maxValue = line.price
+          })
+          // 稍微扩展范围，避免线紧贴边缘
+          const range = maxValue - minValue
+          // 只有当有有效范围时才应用 padding
+          if (range > 0) {
+              // 这里的修改是直接更新对象的属性
+             res.priceRange.minValue = minValue
+             res.priceRange.maxValue = maxValue
+          }
+        }
+        return res
+      },
     })
 
     // 设置数据

@@ -41,7 +41,7 @@ export type GetKlinesParams = {
   endTime?: number // 结束时间（毫秒时间戳）
 }
 
-const BINANCE_API_BASE = import.meta.env.DEV ? '/binance-api' : 'https://api.binance.com'
+const BINANCE_API_BASE = import.meta.env.DEV ? '/binance-api' : 'https://data-api.binance.vision'
 
 /**
  * 获取币安 K线数据
@@ -50,7 +50,7 @@ const BINANCE_API_BASE = import.meta.env.DEV ? '/binance-api' : 'https://api.bin
 export async function getBinanceKlines(params: GetKlinesParams): Promise<BinanceKline[]> {
   const { symbol, interval, limit = 500, startTime, endTime } = params
 
-  const url = new URL(`${BINANCE_API_BASE}/api/v3/klines`)
+  const url = new URL(`${BINANCE_API_BASE}/api/v3/klines`, typeof window !== 'undefined' ? window.location.origin : undefined)
   url.searchParams.set('symbol', symbol.toUpperCase())
   url.searchParams.set('interval', interval)
   url.searchParams.set('limit', String(Math.min(limit, 1000)))

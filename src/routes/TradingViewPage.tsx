@@ -8,7 +8,7 @@ import { POPULAR_SYMBOLS, INTERVAL_OPTIONS, type KlineInterval } from '../lib/bi
 export default function TradingViewPage() {
   const [selectedSymbol, setSelectedSymbol] = useState('BTCUSDT')
   const [selectedInterval, setSelectedInterval] = useState<KlineInterval>('15m')
-  const [showPriceLines, setShowPriceLines] = useState(false)
+  const [showPriceLines, setShowPriceLines] = useState(true)
   const [autoRefresh, setAutoRefresh] = useState(true)
 
   // 获取币安 K线数据
@@ -28,24 +28,42 @@ export default function TradingViewPage() {
 
   // 自定义价格线（基于当前价格的 ±5%）
   const priceLines: PriceLine[] = useMemo(() => {
-    if (!showPriceLines || currentPrice === 0) return []
-    return [
-      {
-        price: currentPrice * 1.05,
-        color: '#10b981',
+    if (!showPriceLines) return []
+    const lines: PriceLine[] = []
+
+    // 基础价格线（基于当前价格）
+    if (currentPrice > 0) {
+      lines.push(
+        {
+          price: currentPrice * 1.05,
+          color: '#10b981',
+          lineWidth: 2,
+          lineStyle: 2,
+          title: '目标 +5%',
+        },
+        {
+          price: currentPrice * 0.95,
+          color: '#ef4444',
+          lineWidth: 2,
+          lineStyle: 2,
+          title: '止损 -5%',
+        }
+      )
+    }
+
+    // BTC 特殊标记线
+    if (selectedSymbol === 'BTCUSDT') {
+      lines.push({
+        price: 70000,
+        color: '#f59e0b', // amber-500
         lineWidth: 2,
-        lineStyle: 2,
-        title: '目标 +5%',
-      },
-      {
-        price: currentPrice * 0.95,
-        color: '#ef4444',
-        lineWidth: 2,
-        lineStyle: 2,
-        title: '止损 -5%',
-      },
-    ]
-  }, [showPriceLines, currentPrice])
+        lineStyle: 0, // 实线 (Solid)
+        title: 'Target $70,000',
+      })
+    }
+
+    return lines
+  }, [showPriceLines, currentPrice, selectedSymbol])
 
   // 获取当前选中币种的信息
   const selectedSymbolInfo = useMemo(

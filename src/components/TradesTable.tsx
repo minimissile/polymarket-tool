@@ -1,9 +1,12 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useMemo } from 'react'
 import { MarketDetailsPanel } from './MarketDetailsPanel'
 import { useInfiniteScrollTrigger } from '../hooks/useInfiniteScrollTrigger'
 import { useMarketDetailsBySlug, type MarketDetailState } from '../hooks/useMarketDetailsBySlug'
 import { type DataApiTrade } from '../lib/polymarketDataApi'
-import { formatClockTime, formatDateTime, formatNumber, formatRelativeTime, formatUsd } from '../lib/format'
+import { formatClockTime, formatDateTime, formatRelativeTime, formatNumber, formatUsd } from '../lib/format'
+import { useTableData } from '../hooks/useTableData'
+import { useCurrentTime } from '../hooks/useCurrentTime'
+import { findLatestTimestamp } from '../lib/analytics'
 
 /** 最近交易表格：按时间倒序展示，并支持关键词筛选。 */
 export function TradesTable(props: {
@@ -28,10 +31,7 @@ export function TradesTable(props: {
     enableMarketDetails: boolean
   }>
 }) {
-  const [query, setQuery] = useState('')
   const maxRows = props.maxRows ?? 5000
-  const pageSize = Math.min(50, maxRows)
-  const [visiblePages, setVisiblePages] = useState(1)
 
   const features = useMemo(() => {
     return {
@@ -45,21 +45,36 @@ export function TradesTable(props: {
     }
   }, [props.features])
 
-  const [nowMs, setNowMs] = useState(() => Date.now())
-  useEffect(() => {
-    if (!features.showRelativeTime && !features.highlightRecentTrades) return
-    const id = window.setInterval(() => setNowMs(Date.now()), 1000)
-    return () => window.clearInterval(id)
-  }, [features.highlightRecentTrades, features.showRelativeTime])
+  const nowMs = useCurrentTime(1000, features.showRelativeTime || features.highlightRecentTrades)
 
-  const lastUpdatedEpochSeconds = useMemo(() => {
-    let latest = 0
-    for (const t of props.trades) {
-      const ts = t.timestamp
-      if (typeof ts === 'number' && Number.isFinite(ts) && ts > latest) latest = ts
-    }
-    return latest > 0 ? latest : undefined
-  }, [props.trades])
+  const filterFn = useCallback((t: DataApiTrade, q: string) => {
+    const title = (t.title ?? '').toLowerCase()
+    const slug = (t.slug ?? '').toLowerCase()
+    const outcome = (t.outcome ?? '').toLowerCase()
+    return title.includes(q) || slug.includes(q) || outcome.includes(q) || t.conditionId.toLowerCase().includes(q)
+  }, [])
+
+  const sortFn = useCallback((a: DataApiTrade, b: DataApiTrade) => b.timestamp - a.timestamp, [])
+
+  const {
+    query,
+    setQuery,
+    filteredData: filtered,
+    visibleData: visible,
+    loadMore,
+    canRevealMore,
+    canFetchMore,
+    isPagingLoading,
+    visibleCount,
+  } = useTableData({
+    data: props.trades,
+    filterFn,
+    sortFn,
+    maxRows: props.maxRows,
+    paging: props.paging,
+  })
+
+  const lastUpdatedEpochSeconds = useMemo(() => findLatestTimestamp(props.trades), [props.trades])
 
   const { expandedBySlug, marketBySlug, fetchMarket, toggleDetails } = useMarketDetailsBySlug({ onOpenMarket: props.onOpenMarket })
 
@@ -84,39 +99,10 @@ export function TradesTable(props: {
     return `${t.timestamp}:${t.asset}:${t.conditionId}:${t.side}:${t.outcomeIndex ?? ''}:${t.price}:${t.size}`
   }
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    const list = props.trades.slice().sort((a, b) => b.timestamp - a.timestamp)
-    const matched = q
-      ? list.filter((t) => {
-          const title = (t.title ?? '').toLowerCase()
-          const slug = (t.slug ?? '').toLowerCase()
-          const outcome = (t.outcome ?? '').toLowerCase()
-          return title.includes(q) || slug.includes(q) || outcome.includes(q) || t.conditionId.toLowerCase().includes(q)
-        })
-      : list
-    return matched.slice(0, maxRows)
-  }, [maxRows, props.trades, query])
-  const visibleCount = Math.min(filtered.length, visiblePages * pageSize)
-
-  const canRevealMore = visibleCount < filtered.length
-  const canFetchMore = Boolean(props.paging?.hasMore) && props.trades.length < maxRows && props.paging?.status !== 'error'
-  const isPagingLoading = props.paging?.status === 'loading'
-
-  const loadMore = useCallback(() => {
-    if (canRevealMore) {
-      setVisiblePages((prev) => prev + 1)
-      return
-    }
-    if (canFetchMore && !isPagingLoading) props.paging?.loadMore()
-  }, [canFetchMore, canRevealMore, isPagingLoading, props.paging])
-
   const sentinelRef = useInfiniteScrollTrigger<HTMLDivElement>({
     enabled: canRevealMore || canFetchMore,
     onTrigger: loadMore,
   })
-
-  const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount])
 
   return (
     <div className="flex flex-col gap-2">
@@ -125,10 +111,7 @@ export function TradesTable(props: {
         <input
           className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-50 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 focus:border-blue-500 transition-all mb-4"
           value={query}
-          onChange={(e) => {
-            setQuery(e.target.value)
-            setVisiblePages(1)
-          }}
+          onChange={(e) => setQuery(e.target.value)}
           placeholder="筛选：标题 / 市场 / outcome / conditionId"
           aria-label="筛选最近交易"
         />

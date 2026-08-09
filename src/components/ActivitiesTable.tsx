@@ -1,9 +1,12 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useMemo } from 'react'
 import { MarketDetailsPanel } from './MarketDetailsPanel'
 import { useInfiniteScrollTrigger } from '../hooks/useInfiniteScrollTrigger'
 import { useMarketDetailsBySlug, type MarketDetailState } from '../hooks/useMarketDetailsBySlug'
 import { type DataApiActivity } from '../lib/polymarketDataApi'
 import { formatClockTime, formatDateTime, formatNumber, formatRelativeTime, formatUsd } from '../lib/format'
+import { useTableData } from '../hooks/useTableData'
+import { useCurrentTime } from '../hooks/useCurrentTime'
+import { findLatestTimestamp } from '../lib/analytics'
 
 type ActivityFeatures = Partial<{
   showIcon: boolean
@@ -25,10 +28,7 @@ export function ActivitiesTable(props: {
   }
   features?: ActivityFeatures
 }) {
-  const [query, setQuery] = useState('')
   const maxRows = props.maxRows ?? 5000
-  const pageSize = Math.min(50, maxRows)
-  const [visiblePages, setVisiblePages] = useState(1)
 
   const features = useMemo(() => {
     return {
@@ -40,21 +40,38 @@ export function ActivitiesTable(props: {
     }
   }, [props.features])
 
-  const [nowMs, setNowMs] = useState(() => Date.now())
-  useEffect(() => {
-    if (!features.showRelativeTime && !features.highlightRecent) return
-    const id = window.setInterval(() => setNowMs(Date.now()), 1000)
-    return () => window.clearInterval(id)
-  }, [features.highlightRecent, features.showRelativeTime])
+  const nowMs = useCurrentTime(1000, features.showRelativeTime || features.highlightRecent)
 
-  const lastUpdatedEpochSeconds = useMemo(() => {
-    let latest = 0
-    for (const a of props.activity) {
-      const ts = a.timestamp
-      if (typeof ts === 'number' && Number.isFinite(ts) && ts > latest) latest = ts
-    }
-    return latest > 0 ? latest : undefined
-  }, [props.activity])
+  const filterFn = useCallback((a: DataApiActivity, q: string) => {
+    const title = (a.title ?? '').toLowerCase()
+    const slug = (a.slug ?? '').toLowerCase()
+    const outcome = (a.outcome ?? '').toLowerCase()
+    const type = (a.type ?? '').toLowerCase()
+    const conditionId = (a.conditionId ?? '').toLowerCase()
+    return title.includes(q) || slug.includes(q) || outcome.includes(q) || type.includes(q) || conditionId.includes(q)
+  }, [])
+
+  const sortFn = useCallback((a: DataApiActivity, b: DataApiActivity) => b.timestamp - a.timestamp, [])
+
+  const {
+    query,
+    setQuery,
+    filteredData: filtered,
+    visibleData: visible,
+    loadMore,
+    canRevealMore,
+    canFetchMore,
+    isPagingLoading,
+    visibleCount,
+  } = useTableData({
+    data: props.activity,
+    filterFn,
+    sortFn,
+    maxRows: props.maxRows,
+    paging: props.paging,
+  })
+
+  const lastUpdatedEpochSeconds = useMemo(() => findLatestTimestamp(props.activity), [props.activity])
 
   const { expandedBySlug, marketBySlug, fetchMarket, toggleDetails } = useMarketDetailsBySlug({ onOpenMarket: props.onOpenMarket })
 
@@ -72,41 +89,10 @@ export function ActivitiesTable(props: {
     return `${a.timestamp}:${a.type}:${a.asset ?? ''}:${a.conditionId ?? ''}:${a.side ?? ''}:${a.outcomeIndex ?? ''}:${a.price ?? ''}:${a.size ?? ''}:${a.usdcSize ?? ''}`
   }
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    const list = props.activity.slice().sort((a, b) => b.timestamp - a.timestamp)
-    const matched = q
-      ? list.filter((a) => {
-          const title = (a.title ?? '').toLowerCase()
-          const slug = (a.slug ?? '').toLowerCase()
-          const outcome = (a.outcome ?? '').toLowerCase()
-          const type = (a.type ?? '').toLowerCase()
-          const conditionId = (a.conditionId ?? '').toLowerCase()
-          return title.includes(q) || slug.includes(q) || outcome.includes(q) || type.includes(q) || conditionId.includes(q)
-        })
-      : list
-    return matched.slice(0, maxRows)
-  }, [maxRows, props.activity, query])
-  const visibleCount = Math.min(filtered.length, visiblePages * pageSize)
-
-  const canRevealMore = visibleCount < filtered.length
-  const canFetchMore = Boolean(props.paging?.hasMore) && props.activity.length < maxRows && props.paging?.status !== 'error'
-  const isPagingLoading = props.paging?.status === 'loading'
-
-  const loadMore = useCallback(() => {
-    if (canRevealMore) {
-      setVisiblePages((prev) => prev + 1)
-      return
-    }
-    if (canFetchMore && !isPagingLoading) props.paging?.loadMore()
-  }, [canFetchMore, canRevealMore, isPagingLoading, props.paging])
-
   const sentinelRef = useInfiniteScrollTrigger<HTMLDivElement>({
     enabled: canRevealMore || canFetchMore,
     onTrigger: loadMore,
   })
-
-  const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount])
 
   return (
     <div className="flex flex-col gap-2">
@@ -115,10 +101,7 @@ export function ActivitiesTable(props: {
         <input
           className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-50 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 focus:border-blue-500 transition-all mb-4"
           value={query}
-          onChange={(e) => {
-            setQuery(e.target.value)
-            setVisiblePages(1)
-          }}
+          onChange={(e) => setQuery(e.target.value)}
           placeholder="筛选：标题 / 市场 / type / conditionId"
           aria-label="筛选账户活动流水"
         />

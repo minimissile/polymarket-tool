@@ -54,6 +54,21 @@ export function summarizeTrader(
   }
 }
 
+/**
+ * 查找数组中对象的最大时间戳（timestamp 字段）。
+ * 
+ * @param items - 包含 timestamp 字段的对象数组
+ * @returns 最大时间戳（秒），若无有效数据返回 undefined
+ */
+export function findLatestTimestamp<T extends { timestamp: number }>(items: T[]): number | undefined {
+  let latest = 0
+  for (const item of items) {
+    const ts = item.timestamp
+    if (typeof ts === 'number' && Number.isFinite(ts) && ts > latest) latest = ts
+  }
+  return latest > 0 ? latest : undefined
+}
+
 export type HeatmapCell = { day: number; hour: number; value: number }
 
 /** 构建“星期 x 小时”的交易次数热力图数据。 */

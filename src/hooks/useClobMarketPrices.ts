@@ -4,6 +4,16 @@ export type ClobPriceInfo = { bestBid?: number; bestAsk?: number; lastTrade?: nu
 
 /**
  * 订阅 Polymarket CLOB WS 行情，返回按 assetId 聚合的 bestBid/bestAsk/lastTrade 快照。
+ *
+ * 功能特性：
+ * 1. 自动重连：支持指数退避策略（1s -> 2s -> 4s -> ... -> 30s）。
+ * 2. 批量更新：通过 200ms 防抖 (debounce/throttle) 减少 React 渲染频率。
+ * 3. 价格清洗：自动过滤无效价格（非 0-1 之间的数值）。
+ *
+ * @param options 配置项
+ * @param options.enabled - 是否启用 WebSocket 连接
+ * @param options.assetIds - 需要订阅的 asset ID 列表
+ * @returns 价格字典，Key 为 assetId，Value 为 { bestBid, bestAsk, lastTrade }
  */
 export function useClobMarketPrices(options: { enabled: boolean; assetIds: string[] }) {
   const wsRef = useRef<WebSocket | null>(null)
@@ -170,10 +180,13 @@ export function useClobMarketPrices(options: { enabled: boolean; assetIds: strin
     return () => closeExisting()
   }, [assetIdsKey, options.enabled])
 
-  const pricesByAssetId = useMemo(() => {
-    void version
-    return priceByAssetIdRef.current
+  // 使用 useState 副本代替直接在 useMemo 中读取 ref，避免并发模式下的不一致警告
+  // 当 version 变化时，我们手动拷贝一份当前 ref 的值
+  const [pricesSnapshot, setPricesSnapshot] = useState<Record<string, ClobPriceInfo>>({})
+
+  useEffect(() => {
+    setPricesSnapshot({ ...priceByAssetIdRef.current })
   }, [version])
 
-  return { pricesByAssetId, version }
+  return pricesSnapshot
 }
